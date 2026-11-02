@@ -22,7 +22,7 @@ workflows:
       ios_signing:
         provisioning_profiles:
           - PhamiTracker App Store
-          - PhamiTracker -- Widget
+          - PhamiTracker - Widget
 
     scripts:
       - name: Write .env
