@@ -1,0 +1,112 @@
+workflows:
+  ios-testflight:
+    name: iOS TestFlight Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: phamijam_asc
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+      vars:
+        PROJECT_DIR: PhamiTracker-Mobile/phamitracker
+
+      # TRACKER_API_URL (the worker's URL, e.g. https://phamitracker.<you>.workers.dev)
+      # and TRACKER_APP_KEY (same value as the worker's APP_KEY secret).
+      groups:
+        - phamitracker_env
+
+      ios_signing:
+        provisioning_profiles:
+          - PhamiTracker App Store
+          - PhamiTracker -- Widget
+
+    scripts:
+      - name: Write .env
+        script: |
+          cd "$PROJECT_DIR"
+          cat > .env <<EOF
+          TRACKER_API_URL=${TRACKER_API_URL:-}
+          TRACKER_APP_KEY=${TRACKER_APP_KEY:-}
+          EOF
+
+      - name: Sync changelog from README
+        script: |
+          cp README.md "$PROJECT_DIR/assets/CHANGELOG.md"
+
+      - name: Flutter pub get
+        script: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Flutter test
+        script: |
+          cd "$PROJECT_DIR"
+          flutter test
+
+      - name: Install CocoaPods
+        script: |
+          cd "$PROJECT_DIR/ios"
+          if [ -f Podfile ]; then pod install; fi
+
+      - name: Apply provisioning profiles
+        script: |
+          cd "$PROJECT_DIR"
+          xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          cd "$PROJECT_DIR"
+          flutter build ipa \
+            --release \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - PhamiTracker-Mobile/phamitracker/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
+
+  # Deploys the cloud poller (Cloudflare Worker + D1). Run it whenever PhamiTracker-Worker changes.
+  worker-deploy:
+    name: Deploy tracker worker
+    max_build_duration: 15
+    instance_type: linux_x2
+
+    environment:
+      node: 22
+      vars:
+        WORKER_DIR: PhamiTracker-Worker
+      # CLOUDFLARE_API_TOKEN (Workers + D1 edit) and CLOUDFLARE_ACCOUNT_ID.
+      groups:
+        - phamitracker_cloudflare
+
+    scripts:
+      - name: Install
+        script: |
+          cd "$WORKER_DIR"
+          npm ci
+
+      - name: Test
+        script: |
+          cd "$WORKER_DIR"
+          npm test
+
+      - name: Apply D1 migrations
+        script: |
+          cd "$WORKER_DIR"
+          npx wrangler d1 migrations apply phamitracker --remote
+
+      - name: Deploy
+        script: |
+          cd "$WORKER_DIR"
+          npx wrangler deploy

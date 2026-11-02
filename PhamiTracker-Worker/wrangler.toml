@@ -1,0 +1,30 @@
+name = "phamitracker"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# The poller. Every minute it picks the players that are due (see src/poller.js) and asks the
+# Apex / VALORANT APIs for their latest rank, so stats are recorded even with the app closed.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "phamitracker"
+database_id = "118f333b-0dcf-40f0-9aee-61738da02631"
+migrations_dir = "migrations"
+
+[vars]
+# Per-cron-run caps that keep us under the API keys' rate limits
+# (apexlegendsapi.com: 2 req/s, HenrikDev basic key: 30 req/min).
+APEX_POLLS_PER_RUN = "40"
+VALORANT_POLLS_PER_RUN = "8"
+# Players whose app/widget hasn't asked for data in this many days stop being polled.
+INACTIVE_AFTER_DAYS = "21"
+
+[observability]
+enabled = true
+
+# Secrets (wrangler secret put <NAME>):
+#   APEX_API_KEY      - https://apexlegendsapi.com
+#   HENRIK_API_KEY    - https://docs.henrikdev.xyz
+#   APP_KEY           - shared key the app sends as X-App-Key

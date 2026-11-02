@@ -1,0 +1,16 @@
+{
+  "name": "phamitracker-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply phamitracker --remote",
+    "migrate:local": "wrangler d1 migrations apply phamitracker --local",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.121.0"
+  }
+}

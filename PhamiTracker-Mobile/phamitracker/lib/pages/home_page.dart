@@ -1,0 +1,327 @@
+import 'package:flutter/material.dart';
+
+import '../models/game.dart';
+import '../models/summary.dart';
+import '../services/app_state.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common.dart';
+import '../widgets/game_switcher.dart';
+import '../widgets/history_chart.dart';
+import '../widgets/match_list.dart';
+import '../widgets/rank_hero.dart';
+import '../widgets/stat_tiles.dart';
+import 'goal_sheet.dart';
+import 'link_account_page.dart';
+import 'settings_page.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late final AppLifecycleListener _lifecycle;
+  AppState? _state;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only refresh on a timer while the app is on screen; the worker covers the rest.
+    _lifecycle = AppLifecycleListener(
+      onResume: () => _state?.startLive(),
+      onPause: () => _state?.stopLive(),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = AppScope.of(context);
+    if (!identical(state, _state)) {
+      _state = state;
+      WidgetsBinding.instance.addPostFrameCallback((_) => state.startLive());
+    }
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    _state?.stopLive();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final game = state.game;
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          _GameGlow(game: game),
+          SafeArea(
+            bottom: false,
+            child: RefreshIndicator(
+              color: game.glow,
+              onRefresh: state.refresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 40),
+                    sliver: SliverList.list(
+                      children: [
+                        _Header(game: game),
+                        const SizedBox(height: 14),
+                        GameSwitcher(
+                          selected: game,
+                          linked: state.accounts.keys.toSet(),
+                          onChanged: state.selectGame,
+                        ),
+                        const SizedBox(height: 18),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 280),
+                          switchInCurve: Curves.easeOutCubic,
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween(begin: const Offset(0, 0.03), end: Offset.zero).animate(animation),
+                              child: child,
+                            ),
+                          ),
+                          child: KeyedSubtree(
+                            key: ValueKey(game),
+                            child: state.account == null ? _LinkPrompt(game: game) : _Dashboard(state: state),
+                          ),
+                        ),
+                        if (game == Game.apex && state.apexMaps != null) ...[
+                          const SectionTitle('Map rotation'),
+                          RotationCard(rotation: state.apexMaps!),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Dashboard extends StatelessWidget {
+  const _Dashboard({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = state.game;
+    final summary = state.summary;
+    final account = state.account!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.error != null) ...[
+          _ErrorBanner(message: state.error!),
+          const SizedBox(height: 12),
+        ],
+        RankHero(game: game, summary: summary, accountName: account.displayName),
+        const SizedBox(height: 14),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: TodayTile(game: game, today: summary?.today ?? const TodayStats())),
+              const SizedBox(width: 14),
+              Expanded(
+                child: GoalTile(
+                  game: game,
+                  goal: state.goal,
+                  score: summary?.score,
+                  onTap: () => showGoalSheet(context, game),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SectionTitle('Climb'),
+        HistoryChart(game: game, history: summary?.history ?? const [], goal: state.goal),
+        if (summary != null && summary.maps.isNotEmpty) ...[
+          const SectionTitle('By map'),
+          MapStatsCard(game: game, maps: summary.maps),
+        ],
+        SectionTitle(
+          'Matches',
+          trailing: state.isLoading(game)
+              ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: game.glow))
+              : null,
+        ),
+        MatchList(game: game, matches: summary?.matches ?? const []),
+      ],
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        ShaderMask(
+          shaderCallback: (rect) => LinearGradient(colors: [Colors.white, game.gradient.last]).createShader(rect),
+          child: const Text(
+            'PhamiTracker',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.white),
+          ),
+        ),
+        const Spacer(),
+        IconButton.filledTonal(
+          style: IconButton.styleFrom(backgroundColor: AppColors.surfaceHigh),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+          icon: const Icon(Icons.tune_rounded, color: AppColors.text),
+        ),
+      ],
+    );
+  }
+}
+
+/// Soft colour wash behind the content that follows the selected game.
+class _GameGlow extends StatelessWidget {
+  const _GameGlow({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: game.glow),
+      duration: const Duration(milliseconds: 500),
+      builder: (context, color, _) => Container(
+        height: 420,
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0.6, -1.1),
+            radius: 1.2,
+            colors: [(color ?? game.glow).withValues(alpha: 0.32), Colors.transparent],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LinkPrompt extends StatelessWidget {
+  const _LinkPrompt({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context) {
+    return TrackerCard(
+      padding: const EdgeInsets.all(24),
+      gradient: LinearGradient(
+        colors: [game.gradient.first.withValues(alpha: 0.28), game.gradient.last.withValues(alpha: 0.12)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(game.icon, size: 40, color: game.glow),
+          const SizedBox(height: 14),
+          Text('Track your ${game.title} rank', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(
+            'Link your account and every ranked game is logged in the cloud, minute by minute, '
+            'even when the app is closed. Then set a goal and add the widgets to your home screen.',
+            style: const TextStyle(color: AppColors.textDim, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: GradientButton(
+              game: game,
+              label: 'Link ${game.title} account',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => LinkAccountPage(game: game)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.loss.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.loss.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_tethering_error_rounded, color: AppColors.loss),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message, style: const TextStyle(fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+  }
+}
+
+class GradientButton extends StatelessWidget {
+  const GradientButton({super.key, required this.game, required this.label, required this.onPressed, this.busy = false});
+
+  final Game game;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onPressed == null ? 0.6 : 1,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: game.linearGradient,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: game.glow.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: busy ? null : onPressed,
+            child: SizedBox(
+              height: 54,
+              child: Center(
+                child: busy
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                    : Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

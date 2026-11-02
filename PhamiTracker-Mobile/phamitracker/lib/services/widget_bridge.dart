@@ -1,0 +1,58 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+
+import '../models/account.dart';
+import '../models/game.dart';
+import '../models/summary.dart';
+import 'tracker_api.dart';
+
+/// Hands the home-screen widgets what they need through the App Group: where the worker is,
+/// which account to show per game, the goal, and the latest numbers as a fallback. The widgets
+/// then fetch from the worker on their own, so they stay current without the app being opened.
+class WidgetBridge {
+  static const _channel = MethodChannel('phamitracker/widgets');
+
+  Future<void> sync({
+    required TrackerConfig config,
+    required Map<Game, TrackedAccount> accounts,
+    required Map<Game, RankGoal> goals,
+    required Map<Game, PlayerSummary> summaries,
+  }) async {
+    final payload = {
+      'apiUrl': config.baseUrl,
+      'appKey': config.appKey,
+      'games': {
+        for (final game in Game.values)
+          if (accounts[game] case final account?)
+            game.id: {
+              'playerId': account.playerId,
+              'name': account.displayName,
+              'unit': game.unit,
+              'goal': goals[game]?.toJson(),
+              'snapshot': snapshotJson(summaries[game]),
+            },
+      },
+    };
+    try {
+      await _channel.invokeMethod('save', jsonEncode(payload));
+    } on MissingPluginException {
+      // Not on iOS (or in tests): there are no widgets to update.
+    } on PlatformException {
+      // App Group missing from the signing profile. The app still works, just no widgets.
+    }
+  }
+
+  /// Same shape as the worker's /widget response, so the widget can read either.
+  static Map<String, dynamic>? snapshotJson(PlayerSummary? s) {
+    if (s == null) return null;
+    return {
+      'score': s.score,
+      'rankLabel': s.rankLabel,
+      'rank': {'name': s.rank.name, 'rr': s.rank.rr},
+      'today': {'delta': s.today.delta, 'matches': s.today.matches, 'wins': s.today.wins, 'losses': s.today.losses},
+      'status': {'online': s.status.online, 'inGame': s.status.inGame},
+      'polledAt': s.polledAt?.millisecondsSinceEpoch,
+    };
+  }
+}
