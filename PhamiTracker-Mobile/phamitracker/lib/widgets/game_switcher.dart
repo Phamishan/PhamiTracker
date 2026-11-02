@@ -36,9 +36,6 @@ class GameSwitcher extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: game == selected ? game.linearGradient : null,
                     borderRadius: BorderRadius.circular(99),
-                    boxShadow: game == selected
-                        ? [BoxShadow(color: game.glow.withValues(alpha: 0.45), blurRadius: 18, offset: const Offset(0, 6))]
-                        : null,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

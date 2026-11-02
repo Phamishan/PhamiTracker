@@ -42,6 +42,7 @@ test("valorant v3 mmr", () => {
     peak: { tier: { name: "Ascendant 1" } },
   });
   assert.deepEqual([p.score, p.rank.tier, p.rank.rr, p.rank.peak], [1542, 18, 42, "Ascendant 1"]);
+  assert.match(p.rank.image, /competitivetiers\/.+\/18\/largeicon\.png$/);
 });
 
 test("valorant mmr history v1 and v2", () => {

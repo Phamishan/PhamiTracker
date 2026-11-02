@@ -26,9 +26,15 @@ class RankHero extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: game.linearGradient,
-        boxShadow: [BoxShadow(color: game.glow.withValues(alpha: 0.35), blurRadius: 40, offset: const Offset(0, 16))],
+        borderRadius: BorderRadius.circular(28),
+        color: AppColors.surface,
+        gradient: LinearGradient(
+          colors: [game.glow.withValues(alpha: 0.16), AppColors.surface],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          stops: const [0, 0.7],
+        ),
+        border: Border.all(color: game.glow.withValues(alpha: 0.25)),
       ),
       child: Stack(
         children: [
@@ -36,7 +42,7 @@ class RankHero extends StatelessWidget {
           Positioned(
             right: -30,
             top: -30,
-            child: Icon(game.icon, size: 190, color: Colors.white.withValues(alpha: 0.10)),
+            child: Icon(game.icon, size: 190, color: game.glow.withValues(alpha: 0.06)),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
@@ -81,10 +87,10 @@ class RankHero extends StatelessWidget {
                           const SizedBox(height: 6),
                           Text(
                             _scoreLine(s),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white.withValues(alpha: 0.88),
+                              color: AppColors.textDim,
                             ),
                           ),
                         ],
@@ -143,9 +149,8 @@ class _RankBadge extends StatelessWidget {
       height: 74,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.black.withValues(alpha: 0.28),
-        border: Border.all(color: color, width: 3),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 22)],
+        color: AppColors.background,
+        border: Border.all(color: color.withValues(alpha: 0.8), width: 2.5),
       ),
       padding: const EdgeInsets.all(8),
       child: imageUrl == null
@@ -170,11 +175,11 @@ class _StatusPill extends StatelessWidget {
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), borderRadius: BorderRadius.circular(99)),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(99)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          LiveDot(color: live ? AppColors.live : Colors.white70, size: 7),
+          LiveDot(color: live ? AppColors.live : AppColors.textDim, size: 7),
           const SizedBox(width: 6),
           Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
         ],
@@ -193,13 +198,13 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(99)),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(99)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.white),
+          Icon(icon, size: 13, color: AppColors.textDim),
           const SizedBox(width: 5),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDim)),
         ],
       ),
     );

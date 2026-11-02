@@ -7,6 +7,10 @@ const BASE = "https://api.henrikdev.xyz/valorant";
 export const VALORANT_REGIONS = ["eu", "na", "ap", "kr", "latam", "br"];
 export const VALORANT_PLATFORMS = ["pc", "console"];
 
+// HenrikDev doesn't return rank art, so use valorant-api.com's icons for the current tier set.
+const TIER_ICONS = "https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04";
+export const valorantTierIcon = (tier) => (tier > 0 ? `${TIER_ICONS}/${tier}/largeicon.png` : null);
+
 async function call(env, path, query = {}) {
   if (!env.HENRIK_API_KEY) throw new ApiError("HENRIK_API_KEY is not set", { retryable: false });
   const url = new URL(BASE + path);
@@ -46,6 +50,7 @@ export function normalizeValorantMmr(data) {
     rank: {
       name: tier.name ?? "Unrated",
       tier: Number(tier.id) || 0,
+      image: valorantTierIcon(Number(tier.id) || 0),
       rr: Number(current.rr) || 0,
       lastChange: Number(current.last_change) || 0,
       gamesNeeded: Number(current.games_needed_for_rating) || 0,

@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 
 import '../models/account.dart';
 import '../models/game.dart';
-import '../models/ranks.dart';
 import '../models/summary.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
@@ -26,7 +25,7 @@ class TodayTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _TileLabel(icon: Icons.bolt_rounded, text: 'Today', color: AppColors.gold),
+          const _TileLabel(icon: Icons.bolt_rounded, text: 'Today', color: AppColors.orange),
           const SizedBox(height: 14),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -68,7 +67,7 @@ class GoalTile extends StatelessWidget {
     final goal = this.goal;
     final score = this.score;
     final progress = goal != null && score != null ? goal.progress(score) : 0.0;
-    final color = rankColor(goal?.label);
+    const color = AppColors.purple;
 
     return GestureDetector(
       onTap: onTap,
@@ -76,7 +75,7 @@ class GoalTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _TileLabel(icon: Icons.flag_rounded, text: 'Rank goal', color: AppColors.cyan),
+            const _TileLabel(icon: Icons.flag_rounded, text: 'Rank goal', color: AppColors.purple),
             const SizedBox(height: 12),
             Center(
               child: SizedBox(
@@ -87,7 +86,7 @@ class GoalTile extends StatelessWidget {
                   duration: const Duration(milliseconds: 900),
                   curve: Curves.easeOutCubic,
                   builder: (context, value, _) => CustomPaint(
-                    painter: GoalRingPainter(progress: value, colors: [game.gradient.first, color, game.gradient.last]),
+                    painter: GoalRingPainter(progress: value, colors: const [AppColors.orange, AppColors.purple]),
                     child: Center(
                       child: goal == null
                           ? const Icon(Icons.add_rounded, size: 36, color: AppColors.textDim)

@@ -9,7 +9,7 @@
 // Every request needs `X-App-Key: <APP_KEY>`.
 
 import { ApiError, APEX_PLATFORMS, fetchApexPlayer } from "./apex.js";
-import { VALORANT_PLATFORMS, VALORANT_REGIONS, fetchValorantPlayer } from "./valorant.js";
+import { VALORANT_PLATFORMS, VALORANT_REGIONS, fetchValorantPlayer, valorantTierIcon } from "./valorant.js";
 import { getApexMaps, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { summarize } from "./stats.js";
 
@@ -75,7 +75,7 @@ async function route(request, env, ctx) {
   const now = Date.now();
   const widget = parts[3] === "widget";
   const tzOffset = clamp(Number(url.searchParams.get("tzOffset")) || 0, -14 * 60, 14 * 60);
-  const days = widget ? 1 : clamp(Number(url.searchParams.get("days")) || 14, 1, 60);
+  const days = widget ? 7 : clamp(Number(url.searchParams.get("days")) || 14, 1, 60);
 
   // Opening the app or a widget refreshing keeps the player "active" for the poller, and gets
   // a live poll if the cron hasn't looked at them in the last few seconds.
@@ -103,29 +103,33 @@ async function route(request, env, ctx) {
   const base = {
     player: publicPlayer(fresh, state),
     score: fresh.score,
-    rank: state?.rank ?? null,
+    rank: state?.rank
+      ? { ...state.rank, image: state.rank.image ?? (fresh.game === "valorant" ? valorantTierIcon(state.rank.tier) : null) }
+      : null,
     rankLabel: rankLabel(fresh.game, state),
     status: state?.status ?? null,
     today: stats.today,
+    history: stats.history,
     polledAt: fresh.last_polled_at,
     lastChangeAt: fresh.last_change_at,
     error: fresh.error,
     serverTime: now,
   };
-  if (widget) return json(base);
-  return json({
-    ...base,
-    level: state?.level ?? null,
-    banner: state?.banner ?? null,
-    history: stats.history,
-    maps: stats.maps,
-    matches: rows.slice(0, 30).map((row) => ({
+  const matches = (limit) =>
+    rows.slice(0, limit).map((row) => ({
       ts: row.ts,
       delta: row.delta,
       scoreAfter: row.score_after,
       kind: row.kind,
       ...row.detail,
-    })),
+    }));
+  if (widget) return json({ ...base, matches: matches(5) });
+  return json({
+    ...base,
+    level: state?.level ?? null,
+    banner: state?.banner ?? null,
+    maps: stats.maps,
+    matches: matches(30),
     nextPollAt: fresh.next_poll_at,
   });
 }

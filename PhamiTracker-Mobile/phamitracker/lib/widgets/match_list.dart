@@ -183,9 +183,9 @@ class _RotationCardState extends State<RotationCard> {
   @override
   Widget build(BuildContext context) {
     final modes = [
-      ('Ranked', widget.rotation.ranked, AppColors.gold),
-      ('Battle Royale', widget.rotation.battleRoyale, AppColors.cyan),
-      ('Mixtape', widget.rotation.ltm, AppColors.violet),
+      ('Ranked', widget.rotation.ranked, AppColors.orange),
+      ('Battle Royale', widget.rotation.battleRoyale, AppColors.purple),
+      ('Mixtape', widget.rotation.ltm, AppColors.textDim),
     ].where((m) => m.$2?.current != null).toList();
 
     return StreamBuilder(

@@ -27,15 +27,19 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Bullet(Icons.bolt_rounded, AppColors.gold, 'RP Today', 'Points won or lost today, plus matches and W/L.'),
+                _Bullet(Icons.bolt_rounded, AppColors.orange, 'RP Today', 'Points won or lost today, plus matches and W/L.'),
                 SizedBox(height: 14),
-                _Bullet(Icons.flag_rounded, AppColors.cyan, 'Rank Goal', 'A progress ring towards the goal you set.'),
+                _Bullet(Icons.flag_rounded, AppColors.purple, 'Rank Goal', 'A progress ring towards the goal you set.'),
+                SizedBox(height: 14),
+                _Bullet(Icons.show_chart_rounded, AppColors.orange, 'Climb', 'Your RP/RR over the last 7 days, with recent matches on the large size.'),
+                SizedBox(height: 14),
+                _Bullet(Icons.map_rounded, AppColors.purple, 'Map Rotation', 'Current Apex ranked or pubs map with a live countdown.'),
                 SizedBox(height: 14),
                 _Bullet(
                   Icons.touch_app_rounded,
-                  AppColors.violet,
+                  AppColors.purple,
                   'Pick a game',
-                  'Long-press a widget → Edit Widget to switch between Apex and VALORANT. They refresh themselves from the cloud tracker.',
+                  'Long-press a widget → Edit Widget to switch game or map mode. All widgets also come in lock screen sizes, and refresh themselves from the cloud tracker.',
                 ),
               ],
             ),
@@ -46,7 +50,7 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.new_releases_rounded, color: AppColors.gold),
+                  leading: const Icon(Icons.new_releases_rounded, color: AppColors.orange),
                   title: const Text("What's new", style: TextStyle(fontWeight: FontWeight.w700)),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangelogPage())),

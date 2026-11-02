@@ -113,13 +113,13 @@ class HistoryChart extends StatelessWidget {
                     if (showGoal)
                       HorizontalLine(
                         y: goalY,
-                        color: AppColors.cyan.withValues(alpha: 0.8),
+                        color: AppColors.purple.withValues(alpha: 0.8),
                         strokeWidth: 1.5,
                         dashArray: [6, 5],
                         label: HorizontalLineLabel(
                           show: true,
                           alignment: Alignment.topLeft,
-                          style: const TextStyle(color: AppColors.cyan, fontWeight: FontWeight.w800, fontSize: 11),
+                          style: const TextStyle(color: AppColors.purple, fontWeight: FontWeight.w800, fontSize: 11),
                           labelResolver: (_) => goal!.label,
                         ),
                       ),
@@ -160,7 +160,7 @@ class HistoryChart extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [game.glow.withValues(alpha: 0.35), game.glow.withValues(alpha: 0)],
+                        colors: [game.glow.withValues(alpha: 0.18), game.glow.withValues(alpha: 0)],
                       ),
                     ),
                   ),

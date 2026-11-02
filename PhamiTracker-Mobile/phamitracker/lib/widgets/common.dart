@@ -115,7 +115,7 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
         decoration: BoxDecoration(
           color: widget.color,
           shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.7), blurRadius: 8)],
+          boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.4), blurRadius: 6)],
         ),
       ),
     );

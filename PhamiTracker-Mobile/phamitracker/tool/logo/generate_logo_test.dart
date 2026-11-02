@@ -13,9 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 const size = 1024.0;
 
-// Same palette as the app: Apex red/orange into VALORANT violet.
-const metal = [Color(0xFFFFD18A), Color(0xFFFF8A00), Color(0xFFFF2E4D), Color(0xFFD4146A), Color(0xFF8B2CF5)];
-const depth = Color(0xFF2A0820);
+// Same palette as the app: Apex orange into VALORANT purple.
+const metal = [Color(0xFFFFD9B0), Color(0xFFF5A35C), Color(0xFFD9772F), Color(0xFF9E8CFF), Color(0xFF6B55D9)];
+const depth = Color(0xFF1C1430);
 
 /// The letter, on a 1000x1000 grid: a bladed stem, a sweeping bowl and a spur, in the spirit of
 /// the PhamiJam P.
@@ -55,7 +55,7 @@ void paintLetter(Canvas canvas, Path path) {
 
   // Extruded depth, like PhamiJam's bevelled gold.
   for (var i = 22; i > 0; i--) {
-    canvas.drawPath(path.shift(Offset(i * 1.1, i * 1.5)), Paint()..color = Color.lerp(depth, const Color(0xFF5A0F35), i / 22)!);
+    canvas.drawPath(path.shift(Offset(i * 1.1, i * 1.5)), Paint()..color = Color.lerp(depth, const Color(0xFF3A2A5E), i / 22)!);
   }
 
   // Neon metal face.
@@ -111,18 +111,18 @@ void paintBackground(Canvas canvas) {
   canvas.drawRect(
     rect,
     Paint()
-      ..shader = ui.Gradient.linear(rect.topLeft, rect.bottomRight, const [Color(0xFF1B0A2E), Color(0xFF07070D)]),
+      ..shader = ui.Gradient.linear(rect.topLeft, rect.bottomRight, const [Color(0xFF17131F), Color(0xFF0B0B11)]),
   );
   // Coloured glows behind the letter.
   canvas.drawCircle(const Offset(620, 380), 380, Paint()
-    ..shader = ui.Gradient.radial(const Offset(620, 380), 380, const [Color(0x88FF2E4D), Color(0x00FF2E4D)]));
+    ..shader = ui.Gradient.radial(const Offset(620, 380), 380, const [Color(0x44F08C45), Color(0x00F08C45)]));
   canvas.drawCircle(const Offset(380, 720), 360, Paint()
-    ..shader = ui.Gradient.radial(const Offset(380, 720), 360, const [Color(0x668B2CF5), Color(0x008B2CF5)]));
+    ..shader = ui.Gradient.radial(const Offset(380, 720), 360, const [Color(0x448B78F2), Color(0x008B78F2)]));
   // Faint crosshair ring: it's a tracker.
   final ring = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 6
-    ..color = const Color(0x22FFFFFF);
+    ..color = const Color(0x16FFFFFF);
   canvas.drawCircle(const Offset(512, 512), 360, ring);
   for (var i = 0; i < 4; i++) {
     final a = i * math.pi / 2;

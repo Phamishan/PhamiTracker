@@ -103,22 +103,22 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/images/P.png"
   remove_alpha_ios: true
-  adaptive_icon_background: "#120A1F"
+  adaptive_icon_background: "#17131F"
   adaptive_icon_foreground: "assets/images/p-trans.png"
   image_path_ios_dark_transparent: "assets/images/p-trans.png"
   image_path_ios_tinted_grayscale: "assets/images/p-trans.png"
   desaturate_tinted_to_grayscale_ios: true
 
 flutter_native_splash:
-  color: "#120A1F"
+  color: "#17131F"
   image: "assets/images/p-trans.png"
-  color_dark: "#07070D"
+  color_dark: "#0B0B11"
   image_dark: "assets/images/p-trans.png"
 
   fullscreen: true
 
   android_12:
     image: "assets/images/p-trans.png"
-    color: "#120A1F"
+    color: "#17131F"
     image_dark: "assets/images/p-trans.png"
-    color_dark: "#07070D"
+    color_dark: "#0B0B11"

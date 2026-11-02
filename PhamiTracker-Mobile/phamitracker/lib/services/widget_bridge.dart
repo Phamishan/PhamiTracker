@@ -53,6 +53,20 @@ class WidgetBridge {
       'today': {'delta': s.today.delta, 'matches': s.today.matches, 'wins': s.today.wins, 'losses': s.today.losses},
       'status': {'online': s.status.online, 'inGame': s.status.inGame},
       'polledAt': s.polledAt?.millisecondsSinceEpoch,
+      'history': [
+        for (final d in s.history.skip(s.history.length > 7 ? s.history.length - 7 : 0))
+          {'day': d.day.toIso8601String().substring(0, 10), 'score': d.score, 'delta': d.delta},
+      ],
+      'matches': [
+        for (final m in s.matches.take(5))
+          {
+            'ts': m.time.millisecondsSinceEpoch,
+            'delta': m.delta,
+            'kind': m.isAdjustment ? 'adjust' : 'match',
+            'map': m.map,
+            if (s.game == Game.apex) 'legend': m.character else 'agent': m.character,
+          },
+      ],
     };
   }
 }

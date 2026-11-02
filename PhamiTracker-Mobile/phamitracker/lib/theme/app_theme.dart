@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 
-/// Dark, high-contrast base with neon accents; each game brings its own gradient on top.
+/// Clean dark base with two accents: orange (Apex) and purple (VALORANT).
 class AppColors {
-  static const background = Color(0xFF07070D);
-  static const surface = Color(0xFF11111B);
-  static const surfaceHigh = Color(0xFF1A1A28);
-  static const border = Color(0x1FFFFFFF);
-  static const text = Color(0xFFF5F5FA);
-  static const textDim = Color(0xFF9B9BB4);
-  static const gain = Color(0xFF2EE59D);
-  static const loss = Color(0xFFFF4D6D);
-  static const live = Color(0xFF3DFF8B);
-  static const cyan = Color(0xFF26D9FF);
-  static const violet = Color(0xFF8B5CFF);
-  static const gold = Color(0xFFFFC93C);
+  static const background = Color(0xFF0B0B11);
+  static const surface = Color(0xFF15151E);
+  static const surfaceHigh = Color(0xFF1E1E29);
+  static const border = Color(0x14FFFFFF);
+  static const text = Color(0xFFF2F2F7);
+  static const textDim = Color(0xFF9A9AAE);
+  static const gain = Color(0xFF6CCF9C);
+  static const loss = Color(0xFFEE7C88);
+  static const live = Color(0xFF6CCF9C);
+  static const orange = Color(0xFFF08C45);
+  static const purple = Color(0xFF8B78F2);
 
   static Color delta(num value) => value > 0 ? gain : value < 0 ? loss : textDim;
 }
@@ -23,7 +22,7 @@ ThemeData buildTheme() {
     brightness: Brightness.dark,
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFFFF4655),
+      seedColor: const Color(0xFF8B78F2),
       brightness: Brightness.dark,
       surface: AppColors.surface,
     ),

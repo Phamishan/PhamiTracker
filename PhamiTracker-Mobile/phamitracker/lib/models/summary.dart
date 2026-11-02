@@ -80,7 +80,7 @@ class RankInfo {
 
   factory RankInfo.fromJson(Map<String, dynamic> json) => RankInfo(
         name: json['name'] as String?,
-        image: json['image'] as String?,
+        image: json['image'] as String? ?? valorantTierIcon(_int(json['tier'])),
         rr: _int(json['rr']),
         ladderPos: _int(json['ladderPos']),
         peak: json['peak'] as String?,
@@ -207,6 +207,11 @@ class MatchEntry {
         roundsLost: _int(json['roundsLost']),
       );
 }
+
+/// Official VALORANT rank art (valorant-api.com) for a competitive tier id.
+String? valorantTierIcon(int? tier) => tier == null || tier <= 0
+    ? null
+    : 'https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04/$tier/largeicon.png';
 
 /// Apex map rotation.
 class MapRotation {

@@ -178,7 +178,7 @@ class _Header extends StatelessWidget {
     return Row(
       children: [
         ShaderMask(
-          shaderCallback: (rect) => LinearGradient(colors: [Colors.white, game.gradient.last]).createShader(rect),
+          shaderCallback: (rect) => const LinearGradient(colors: [AppColors.orange, AppColors.purple]).createShader(rect),
           child: const Text(
             'PhamiTracker',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.white),
@@ -212,7 +212,7 @@ class _GameGlow extends StatelessWidget {
           gradient: RadialGradient(
             center: const Alignment(0.6, -1.1),
             radius: 1.2,
-            colors: [(color ?? game.glow).withValues(alpha: 0.32), Colors.transparent],
+            colors: [(color ?? game.glow).withValues(alpha: 0.12), Colors.transparent],
           ),
         ),
       ),
@@ -230,7 +230,7 @@ class _LinkPrompt extends StatelessWidget {
     return TrackerCard(
       padding: const EdgeInsets.all(24),
       gradient: LinearGradient(
-        colors: [game.gradient.first.withValues(alpha: 0.28), game.gradient.last.withValues(alpha: 0.12)],
+        colors: [game.glow.withValues(alpha: 0.14), AppColors.surface],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -304,8 +304,7 @@ class GradientButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: game.linearGradient,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: game.glow.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))],
-        ),
+                  ),
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
