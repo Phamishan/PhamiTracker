@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 /// Dark graphite surfaces, one coral accent, magenta for goals, green/red for results.
 class AppColors {
@@ -27,31 +28,37 @@ class AppColors {
   );
 }
 
-/// The three voices of the UI: mono labels, condensed display type, Barlow for everything else.
+/// Roboto throughout: small dim labels, bold numbers, regular body text.
 class AppText {
-  /// `TODAY · 6 GAMES`
-  static TextStyle label({Color color = AppColors.textDim, double size = 11}) => TextStyle(
-        fontFamily: 'DMMono',
+  /// Card and section labels: `Today · 6 games`.
+  static TextStyle label({Color color = AppColors.textDim, double size = 13}) =>
+      TextStyle(fontFamily: 'Roboto', fontSize: size, fontWeight: FontWeight.w500, color: color);
+
+  /// Numbers that should line up: `13,460 / 16,000`, countdowns.
+  static TextStyle mono({Color color = AppColors.textDim, double size = 13}) => TextStyle(
+        fontFamily: 'Roboto',
         fontSize: size,
-        fontWeight: FontWeight.w500,
-        letterSpacing: size * 0.2,
         color: color,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 
-  /// `13,460 / 16,000 RP`
-  static TextStyle mono({Color color = AppColors.textDim, double size = 13}) =>
-      TextStyle(fontFamily: 'DMMono', fontSize: size, color: color, fontFeatures: const [FontFeature.tabularFigures()]);
-
-  /// `DIAMOND III`, `+359`
-  static TextStyle display(double size, {Color color = AppColors.text, FontWeight weight = FontWeight.w800}) =>
-      TextStyle(fontFamily: 'BarlowCondensed', fontSize: size, fontWeight: weight, color: color, height: 1, letterSpacing: 0.2);
+  /// Headline numbers and names: `Diamond III`, `+359`.
+  static TextStyle display(double size, {Color color = AppColors.text, FontWeight weight = FontWeight.w700}) => TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: size,
+        fontWeight: weight == FontWeight.w800 ? FontWeight.w700 : weight,
+        color: color,
+        height: 1.1,
+        letterSpacing: -0.3,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
 }
 
 ThemeData buildTheme() {
   final base = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
-    fontFamily: 'Barlow',
+    fontFamily: 'Roboto',
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
       brightness: Brightness.dark,
@@ -84,4 +91,5 @@ ThemeData buildTheme() {
   );
 }
 
-String signed(num value) => value > 0 ? '+$value' : '$value';
+/// `+2,700` / `-35`.
+String signed(num value) => '${value > 0 ? '+' : ''}${NumberFormat.decimalPattern().format(value)}';

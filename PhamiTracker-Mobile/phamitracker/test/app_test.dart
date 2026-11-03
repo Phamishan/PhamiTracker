@@ -9,6 +9,7 @@ import 'package:phamitracker/models/game.dart';
 import 'package:phamitracker/models/summary.dart';
 import 'package:phamitracker/services/app_state.dart';
 import 'package:phamitracker/services/tracker_api.dart';
+import 'package:phamitracker/widgets/match_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final _now = DateTime.now().millisecondsSinceEpoch;
@@ -108,20 +109,41 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('PLATINUM I'), findsOneWidget);
+    expect(find.text('Platinum I'), findsOneWidget);
     expect(find.text('10,900 RP'), findsOneWidget);
-    // Rank card's today line, Today tile, the chart's total and the Olympus row.
-    expect(find.textContaining('+184', findRichText: true), findsNWidgets(4));
-    expect(find.text('SET A GOAL'), findsOneWidget);
-    expect(find.text('IN MATCH · WRAITH'), findsOneWidget);
+    expect(find.text('Set a goal'), findsOneWidget);
+    expect(find.text('In match · Wraith'), findsOneWidget);
     expect(find.text('2W'), findsOneWidget);
+    expect(find.text('7D'), findsOneWidget);
+    expect(find.text('Matches · 2'), findsOneWidget);
 
     await tester.tap(find.text('VALORANT'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('TRACK YOUR VALORANT RANK'), findsOneWidget);
+    expect(find.text('Track your VALORANT rank'), findsOneWidget);
 
     // Unmount so the live-refresh timer is cancelled.
     await tester.pumpWidget(const SizedBox());
+  });
+
+  test('match dates', () {
+    final now = DateTime(2026, 11, 3, 15);
+    expect(matchDate(DateTime(2026, 11, 3, 13, 48), now: now), 'Today, 13:48');
+    expect(matchDate(DateTime(2026, 11, 2, 21, 2), now: now), 'Yesterday, 21:02');
+    expect(matchDate(DateTime(2026, 11, 1, 18, 30), now: now), 'Sun 1 Nov, 18:30');
+    expect(matchDate(DateTime(2025, 12, 24, 9, 5), now: now), '24 Dec 2025, 09:05');
+  });
+
+  testWidgets('match list shows five rows and scrolls to the rest', (tester) async {
+    final matches = [
+      for (var i = 0; i < 12; i++)
+        MatchEntry(time: DateTime(2026, 11, 3, 12).subtract(Duration(hours: i)), delta: i.isEven ? 20 : -15, scoreAfter: 1000, isAdjustment: false, map: 'Map $i'),
+    ];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: MatchList(game: Game.apex, matches: matches)))));
+    expect(tester.getSize(find.byType(MatchList)).height, closeTo(MatchList.rowHeight * 5 + 8, 2));
+    expect(find.text('Map 11'), findsNothing);
+    await tester.drag(find.byType(ListView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    expect(find.text('Map 11'), findsOneWidget);
   });
 }

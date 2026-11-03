@@ -3,6 +3,7 @@
 //   POST   /v1/players                 link an account  {game, name, tag?, platform, region?}
 //   GET    /v1/players/:id             dashboard summary  ?tzOffset=<min east of UTC>&days=&refresh=1
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
+//   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   DELETE /v1/players/:id             stop tracking
 //   GET    /v1/apex/maps               Apex map rotation
 //   GET    /v1/apex/season             Current season + ranked split dates
@@ -73,13 +74,14 @@ async function route(request, env, ctx) {
     ]);
     return json({ ok: true });
   }
-  if (request.method !== "GET" || parts.length > 4 || (parts[3] && parts[3] !== "widget")) {
+  if (request.method !== "GET" || parts.length > 4 || (parts[3] && !["widget", "history"].includes(parts[3]))) {
     return fail(404, "Not found");
   }
 
   const now = Date.now();
   const widget = parts[3] === "widget";
   const tzOffset = clamp(Number(url.searchParams.get("tzOffset")) || 0, -14 * 60, 14 * 60);
+  if (parts[3] === "history") return history(env, player, url, { now, tzOffset });
   const days = widget ? 7 : clamp(Number(url.searchParams.get("days")) || 14, 1, 60);
 
   // Opening the app or a widget refreshing keeps the player "active" for the poller, and gets
@@ -122,8 +124,16 @@ async function route(request, env, ctx) {
     season,
     serverTime: now,
   };
+  // The match list isn't tied to the stats window: the app scrolls back through the last 100.
+  const recent = (
+    await env.DB.prepare(
+      "SELECT ts, delta, score_after, kind, detail FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT ?",
+    )
+      .bind(player.id, widget ? 5 : 100)
+      .all()
+  ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
   const matches = (limit) =>
-    rows.slice(0, limit).map((row) => ({
+    recent.slice(0, limit).map((row) => ({
       ts: row.ts,
       delta: row.delta,
       scoreAfter: row.score_after,
@@ -136,9 +146,22 @@ async function route(request, env, ctx) {
     level: state?.level ?? null,
     banner: state?.banner ?? null,
     maps: stats.maps,
-    matches: matches(30),
+    matches: matches(100),
     nextPollAt: fresh.next_poll_at,
   });
+}
+
+/** Daily scores for the climb chart. `days=0` means everything since the account was linked. */
+async function history(env, player, url, { now, tzOffset }) {
+  const requested = Number(url.searchParams.get("days"));
+  const sinceLinked = Math.floor((now - player.created_at) / DAY) + 1; // + today
+  const days = clamp(requested > 0 ? requested : Math.max(sinceLinked, 7), 1, 3650);
+  const rows = (
+    await env.DB.prepare("SELECT ts, delta, score_after, kind FROM matches WHERE player_id = ? AND ts >= ?")
+      .bind(player.id, now - (days + 1) * DAY)
+      .all()
+  ).results;
+  return json({ days, history: summarize(rows, player.score, { tzOffset, days, now }).history });
 }
 
 async function createPlayer(request, env) {

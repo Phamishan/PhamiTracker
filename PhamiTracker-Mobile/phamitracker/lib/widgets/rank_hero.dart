@@ -33,8 +33,6 @@ class RankHero extends StatelessWidget {
     final tags = [
       if (s?.season?.name != null) [s!.season!.name, if (s.season!.split != null) 'Split ${s.season!.split}'].join(' · '),
       if (s?.rank.peak != null) 'Peak ${s!.rank.peak}',
-      if (s?.level != null) 'Lvl ${s!.level}',
-      if (s?.rank.ladderPos != null) '#${_number.format(s!.rank.ladderPos)}',
       if ((s?.rank.gamesNeeded ?? 0) > 0) '${s!.rank.gamesNeeded} placements left',
       'Updated ${timeAgo(s?.polledAt)}',
     ];
@@ -77,7 +75,7 @@ class RankHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text(tags.join('  ·  ').toUpperCase(), style: AppText.label(color: AppColors.textFaint, size: 10)),
+          Text(tags.join('  ·  '), style: AppText.label(color: AppColors.textFaint, size: 12)),
         ],
       ),
     );
@@ -93,7 +91,7 @@ class _CurrentRank extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = summary;
-    final rankName = (s?.rankLabel ?? s?.rank.name ?? '—').toUpperCase();
+    final rankName = s?.rankLabel ?? s?.rank.name ?? '—';
     final score = s?.score;
     final today = s?.today ?? const TodayStats();
     return Column(
@@ -109,7 +107,7 @@ class _CurrentRank extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Text(rankName, style: AppText.display(26)),
+                child: Text(rankName, style: AppText.display(24)),
               ),
             ),
           ],
@@ -121,15 +119,15 @@ class _CurrentRank extends StatelessWidget {
               : game == Game.valorant
                   ? '${s!.rank.rr ?? 0} RR'
                   : '${_number.format(score)} RP',
-          style: AppText.display(30, weight: FontWeight.w700),
+          style: AppText.display(28),
         ),
         const Spacer(),
         const SizedBox(height: 16),
-        Text('TODAY', style: AppText.label()),
+        Text('Today', style: AppText.label()),
         const SizedBox(height: 4),
         Text(
           '${signed(today.delta)} ${game.unit} · ${today.matches} ${today.matches == 1 ? 'game' : 'games'}',
-          style: AppText.display(19, color: AppColors.delta(today.delta), weight: FontWeight.w700),
+          style: AppText.display(18, color: AppColors.delta(today.delta)),
         ),
       ],
     );
@@ -154,7 +152,7 @@ class _Goal extends StatelessWidget {
         children: [
           const CardLabel('Rank goal', icon: Icons.gps_fixed_rounded),
           const SizedBox(height: 14),
-          Text('SET A GOAL', style: AppText.display(26, color: AppColors.goalSoft)),
+          Text('Set a goal', style: AppText.display(24, color: AppColors.goalSoft)),
           const SizedBox(height: 10),
           Text(
             suggestion == null ? 'Pick the rank you\'re grinding for.' : 'Next up: ${suggestion.label}',
@@ -178,15 +176,15 @@ class _Goal extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(goal.label.toUpperCase(), style: AppText.display(26, color: AppColors.goalSoft)),
+          child: Text(goal.label, style: AppText.display(24, color: AppColors.goalSoft)),
         ),
         const SizedBox(height: 12),
         if (remaining == 0)
-          Text('REACHED', style: AppText.display(30, color: AppColors.gain, weight: FontWeight.w700))
+          Text('Reached', style: AppText.display(28, color: AppColors.gain))
         else
           Text.rich(
             TextSpan(children: [
-              TextSpan(text: _number.format(remaining), style: AppText.display(30, weight: FontWeight.w700)),
+              TextSpan(text: _number.format(remaining), style: AppText.display(28)),
               TextSpan(text: '  ${game.unit} to go', style: const TextStyle(color: AppColors.textDim, fontSize: 13)),
             ]),
             maxLines: 1,
@@ -212,7 +210,7 @@ class _Goal extends StatelessWidget {
             (final p?, _) when p <= 0 => 'Pace: ${signed(p)} ${game.unit}/day',
             _ => '${(goal.progress(current) * 100).round()}% of the way',
           },
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(color: AppColors.textDim, fontSize: 12.5),
         ),
@@ -270,7 +268,7 @@ class _Status extends StatelessWidget {
       children: [
         LiveDot(color: live ? AppColors.live : AppColors.textFaint, size: 7),
         const SizedBox(width: 7),
-        Text(text.toUpperCase(), style: AppText.label(color: live ? AppColors.live : AppColors.textFaint, size: 10)),
+        Text(text, style: AppText.label(color: live ? AppColors.live : AppColors.textFaint, size: 12)),
       ],
     );
   }

@@ -9,8 +9,7 @@
 ☁️ - Live tracking in the cloud (works with the app closed)
 ⚡ - RP/RR earned today
 🎯 - Rank goal with split countdown & RP/day pace
-📊 - Win rate
-📈 - Climb chart (last 14 days)
+📈 - Climb chart (all time, 3 months, 1 month, 14 days, 7 days)
 📜 - Match history (legend/agent, map, K/D/A)
 🗺️ - RP/RR per map
 🔄 - Apex map rotation with countdown
@@ -36,4 +35,19 @@
   - Added map art to the map rotation
   - Fixed VALORANT rank image not showing
   - New app icon
+  - Updated readme
+- 1.0.2 - 03/11/2026
+  - Simplified the design
+  - Changed the font to Roboto (app and widgets)
+  - Added all time, 3 months, 1 month, 14 days and 7 days to the Climb chart
+  - Added a range option to the Climb widget
+  - Added dates to matches
+  - Made the match list scrollable (shows 5, scroll for up to 100)
+  - Added your last 5 matches to the large Climb widget
+  - Made the map rotation brighter
+  - Removed the win rate dial
+  - Removed level and ladder rank from the rank card
+  - Fixed the goal pace text being cut off
+  - Fixed overlapping dates on the Climb chart
+  - Added thousands separators to totals
   - Updated readme

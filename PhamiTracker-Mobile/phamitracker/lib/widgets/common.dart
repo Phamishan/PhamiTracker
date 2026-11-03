@@ -35,7 +35,7 @@ class TrackerCard extends StatelessWidget {
   }
 }
 
-/// Mono uppercase label, optionally with a leading icon: `◎ RANK GOAL`.
+/// Small dim label, optionally with a leading icon: `◎ Rank goal`.
 class CardLabel extends StatelessWidget {
   const CardLabel(this.text, {super.key, this.icon, this.color = AppColors.textDim, this.trailing});
 
@@ -52,7 +52,7 @@ class CardLabel extends StatelessWidget {
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 8),
         ],
-        Flexible(child: Text(text.toUpperCase(), style: AppText.label(color: color), overflow: TextOverflow.ellipsis)),
+        Flexible(child: Text(text, style: AppText.label(color: color), overflow: TextOverflow.ellipsis)),
         if (trailing != null) ...[const Spacer(), trailing!],
       ],
     );
@@ -68,8 +68,8 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 26, 6, 10),
-      child: CardLabel(title, color: AppColors.textFaint, trailing: trailing),
+      padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
+      child: CardLabel(title, color: AppColors.text, trailing: trailing),
     );
   }
 }
@@ -221,88 +221,6 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_SparklinePainter old) => old.values != values || old.color != color;
-}
-
-/// Ring gauge with tick marks around it, like a dial.
-class GaugeRing extends StatelessWidget {
-  const GaugeRing({super.key, required this.progress, this.color = AppColors.goal, required this.child, this.size = 150});
-
-  final double progress;
-  final Color color;
-  final Widget child;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: size,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: progress.clamp(0, 1)),
-        duration: const Duration(milliseconds: 900),
-        curve: Curves.easeOutCubic,
-        builder: (context, value, _) => CustomPaint(
-          painter: _GaugePainter(value, color),
-          child: Center(child: child),
-        ),
-      ),
-    );
-  }
-}
-
-class _GaugePainter extends CustomPainter {
-  _GaugePainter(this.progress, this.color);
-
-  final double progress;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.width / 2;
-    // Tick marks: every 5th one longer.
-    for (var i = 0; i < 60; i++) {
-      final a = -math.pi / 2 + i * math.pi * 2 / 60;
-      final major = i % 5 == 0;
-      final outer = r - 2;
-      final inner = outer - (major ? 9 : 5);
-      final lit = i / 60 < progress;
-      canvas.drawLine(
-        c + Offset(math.cos(a), math.sin(a)) * inner,
-        c + Offset(math.cos(a), math.sin(a)) * outer,
-        Paint()
-          ..strokeWidth = major ? 2 : 1.2
-          ..strokeCap = StrokeCap.round
-          ..color = lit ? color.withValues(alpha: 0.75) : Colors.white.withValues(alpha: major ? 0.22 : 0.12),
-      );
-    }
-    final arcRect = Rect.fromCircle(center: c, radius: r - 20);
-    canvas.drawArc(
-      arcRect,
-      0,
-      math.pi * 2,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..color = AppColors.surfaceHigh,
-    );
-    if (progress > 0) {
-      canvas.drawArc(
-        arcRect,
-        -math.pi / 2,
-        math.pi * 2 * progress,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..strokeCap = StrokeCap.round
-          ..color = color,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_GaugePainter old) => old.progress != progress || old.color != color;
 }
 
 String timeAgo(DateTime? time, {DateTime? now}) {

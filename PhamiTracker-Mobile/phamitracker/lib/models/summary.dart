@@ -316,3 +316,20 @@ class RotationSlot {
     );
   }
 }
+
+/// Ranges for the climb chart. [days] 0 means everything since the account was linked.
+enum ClimbRange {
+  allTime('All', 0),
+  threeMonths('3M', 90),
+  month('1M', 30),
+  twoWeeks('14D', 14),
+  week('7D', 7);
+
+  const ClimbRange(this.label, this.days);
+
+  final String label;
+  final int days;
+
+  static ClimbRange fromName(String? name) =>
+      ClimbRange.values.firstWhere((r) => r.name == name, orElse: () => ClimbRange.twoWeeks);
+}

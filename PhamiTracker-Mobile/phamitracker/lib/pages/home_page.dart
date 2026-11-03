@@ -64,7 +64,7 @@ class _HomePageState extends State<HomePage> {
             bottom: false,
             child: RefreshIndicator(
               color: game.glow,
-              onRefresh: state.refresh,
+              onRefresh: state.refreshAll,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                 slivers: [
@@ -138,24 +138,21 @@ class _Dashboard extends StatelessWidget {
           onGoalTap: () => showGoalSheet(context, game),
         ),
         const SizedBox(height: 12),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: TodayTile(game: game, today: summary?.today ?? const TodayStats())),
-              const SizedBox(width: 12),
-              Expanded(child: SessionTile(today: summary?.today ?? const TodayStats())),
-            ],
-          ),
-        ),
+        TodayTile(game: game, today: summary?.today ?? const TodayStats()),
         const SectionTitle('Climb'),
-        HistoryChart(game: game, history: summary?.history ?? const [], goal: state.goal),
+        HistoryChart(
+          game: game,
+          history: state.climb(game),
+          range: state.climbRange(game),
+          onRange: (range) => state.setClimbRange(game, range),
+          goal: state.goal,
+        ),
         if (summary != null && summary.maps.isNotEmpty) ...[
           const SectionTitle('By map'),
           MapStatsCard(game: game, maps: summary.maps),
         ],
         SectionTitle(
-          'Matches',
+          summary == null || summary.matches.isEmpty ? 'Matches' : 'Matches · ${summary.matches.length}',
           trailing: state.isLoading(game)
               ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: game.glow))
               : null,
@@ -175,7 +172,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text('PHAMITRACKER', style: AppText.display(30)),
+        Text('PhamiTracker', style: AppText.display(28)),
         const SizedBox(width: 8),
         Container(width: 7, height: 7, decoration: BoxDecoration(color: game.glow, shape: BoxShape.circle)),
         const Spacer(),
@@ -203,7 +200,7 @@ class _LinkPrompt extends StatelessWidget {
         children: [
           Icon(game.icon, size: 40, color: game.glow),
           const SizedBox(height: 14),
-          Text('TRACK YOUR ${game.title.toUpperCase()} RANK', style: AppText.display(28)),
+          Text('Track your ${game.title} rank', style: AppText.display(24)),
           const SizedBox(height: 8),
           Text(
             'Link your account and every ranked game is logged in the cloud, minute by minute, '
@@ -276,7 +273,7 @@ class GradientButton extends StatelessWidget {
               child: Center(
                 child: busy
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                    : Text(label.toUpperCase(), style: AppText.display(20, color: Colors.white, weight: FontWeight.w700)),
+                    : Text(label, style: AppText.display(17, color: Colors.white, weight: FontWeight.w600)),
               ),
             ),
           ),

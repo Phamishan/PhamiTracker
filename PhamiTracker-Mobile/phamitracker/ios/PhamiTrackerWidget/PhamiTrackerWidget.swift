@@ -27,15 +27,30 @@ private let goalSoft = Color(hex: 0xB98CF5)
 private let gain = Color(hex: 0x4CC38A)
 private let loss = Color(hex: 0xF25555)
 
+/// "Today 13:48", "Yesterday 21:02", "Sun 1 Nov".
+private func matchDate(_ date: Date) -> String {
+  let time = date.formatted(date: .omitted, time: .shortened)
+  if Calendar.current.isDateInToday(date) { return "Today \(time)" }
+  if Calendar.current.isDateInYesterday(date) { return "Yesterday \(time)" }
+  return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+}
+
 private func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
 private func deltaColor(_ n: Int) -> Color { n > 0 ? gain : n < 0 ? loss : textDim }
 
-/// Condensed display type: `DIAMOND III`, `+359`.
-private func display(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font {
-  .system(size: size, weight: weight).width(.condensed)
+/// Roboto (bundled in Fonts/, listed under UIAppFonts) in the three weights the app uses.
+private func roboto(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+  switch weight {
+  case .heavy, .black, .bold: return .custom("Roboto-Bold", size: size)
+  case .medium, .semibold: return .custom("Roboto-Medium", size: size)
+  default: return .custom("Roboto-Regular", size: size)
+  }
 }
 
-/// Mono uppercase label: `TODAY · 6 GAMES`.
+/// Headline numbers and names: `Diamond III`, `+359`.
+private func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font { roboto(size, weight).monospacedDigit() }
+
+/// Small dim label: `Today · 6 games`.
 private struct MonoLabel: View {
   let text: String
   var color: Color = textDim
@@ -48,9 +63,8 @@ private struct MonoLabel: View {
   }
 
   var body: some View {
-    Text(text.uppercased())
-      .font(.system(size: size, weight: .medium, design: .monospaced))
-      .tracking(size * 0.18)
+    Text(text)
+      .font(roboto(size + 1, .medium))
       .foregroundStyle(color)
       .lineLimit(1)
   }
@@ -97,7 +111,7 @@ enum RotationMode: String, AppEnum {
     .battleRoyale: "Battle Royale",
   ]
 
-  var title: String { self == .ranked ? "RANKED" : "PUBS" }
+  var title: String { self == .ranked ? "Ranked" : "Pubs" }
 }
 
 struct RotationIntent: WidgetConfigurationIntent {
@@ -109,6 +123,64 @@ struct RotationIntent: WidgetConfigurationIntent {
 
   init() {}
   init(mode: RotationMode) { self.mode = mode }
+}
+
+/// Range for the Climb widget, picked in Edit Widget (widgets can't load data on a tap).
+enum ClimbSpan: String, AppEnum {
+  case allTime, threeMonths, month, twoWeeks, week
+
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Range"
+  static var caseDisplayRepresentations: [ClimbSpan: DisplayRepresentation] = [
+    .allTime: "All time",
+    .threeMonths: "3 months",
+    .month: "1 month",
+    .twoWeeks: "14 days",
+    .week: "7 days",
+  ]
+
+  /// Days to ask the worker for; 0 = since the account was linked.
+  var days: Int {
+    switch self {
+    case .allTime: 0
+    case .threeMonths: 90
+    case .month: 30
+    case .twoWeeks: 14
+    case .week: 7
+    }
+  }
+
+  var short: String {
+    switch self {
+    case .allTime: "All"
+    case .threeMonths: "3M"
+    case .month: "1M"
+    case .twoWeeks: "14D"
+    case .week: "7D"
+    }
+  }
+
+  var title: String {
+    switch self {
+    case .allTime: "All time"
+    case .threeMonths: "3 months"
+    case .month: "1 month"
+    case .twoWeeks: "14 days"
+    case .week: "7 days"
+    }
+  }
+}
+
+struct ClimbIntent: WidgetConfigurationIntent {
+  static var title: LocalizedStringResource = "Climb"
+  static var description = IntentDescription("Choose the game and how far back the chart goes.")
+
+  @Parameter(title: "Game", default: .apex)
+  var game: TrackedGame
+
+  @Parameter(title: "Range", default: .week)
+  var range: ClimbSpan
+
+  init() {}
 }
 
 // MARK: - Data
@@ -220,6 +292,7 @@ struct TrackerEntry: TimelineEntry {
   let snapshot: Snapshot?
   let goal: Goal?
   var rankImage: UIImage? = nil
+  var climbRange: ClimbSpan = .week
 
   static func preview(_ game: TrackedGame) -> TrackerEntry {
     let base = game == .apex ? 13_100 : 1_380
@@ -327,6 +400,53 @@ struct Provider: AppIntentTimelineProvider {
     let minutes = entry.snapshot?.isLive == true ? 10 : 20
     let next = Calendar.current.date(byAdding: .minute, value: minutes, to: .now)!
     return Timeline(entries: [entry], policy: .after(next))
+  }
+}
+
+/// The Climb widget: same entry as the others, with the chart swapped for the chosen range.
+struct ClimbProvider: AppIntentTimelineProvider {
+  struct HistoryResponse: Decodable { let history: [Snapshot.Day] }
+
+  func placeholder(in context: Context) -> TrackerEntry { .preview(.apex) }
+
+  func snapshot(for configuration: ClimbIntent, in context: Context) async -> TrackerEntry {
+    if context.isPreview {
+      var entry = TrackerEntry.preview(configuration.game)
+      entry.climbRange = configuration.range
+      return entry
+    }
+    return await load(configuration)
+  }
+
+  func timeline(for configuration: ClimbIntent, in context: Context) async -> Timeline<TrackerEntry> {
+    let entry = await load(configuration)
+    // Longer ranges barely change between games, so these can refresh less often.
+    let minutes = configuration.range == .week ? 20 : 60
+    return Timeline(entries: [entry], policy: .after(Calendar.current.date(byAdding: .minute, value: minutes, to: .now)!))
+  }
+
+  private func load(_ configuration: ClimbIntent) async -> TrackerEntry {
+    var entry = await TrackerStore.load(configuration.game)
+    entry.climbRange = configuration.range
+    guard configuration.range != .week, let config = TrackerStore.config(),
+      let playerId = config.games[configuration.game.rawValue]?.playerId
+    else { return entry }
+
+    let key = "climb.\(configuration.game.rawValue).\(configuration.range.rawValue)"
+    let offset = TimeZone.current.secondsFromGMT() / 60
+    let path = "/v1/players/\(playerId)/history?days=\(configuration.range.days)&tzOffset=\(offset)"
+    var history: [Snapshot.Day]? = TrackerStore.cached(key)
+    if let fresh: HistoryResponse = await TrackerStore.get(path, config: config) {
+      history = fresh.history
+      TrackerStore.cache(fresh.history, key: key)
+    }
+    if let history, var snapshot = entry.snapshot {
+      snapshot.history = history
+      entry = TrackerEntry(
+        date: entry.date, game: entry.game, state: entry.state, name: entry.name, snapshot: snapshot,
+        goal: entry.goal, rankImage: entry.rankImage, climbRange: configuration.range)
+    }
+    return entry
   }
 }
 
@@ -442,11 +562,11 @@ struct RankGoalWidget: Widget {
 
 struct ClimbWidget: Widget {
   var body: some WidgetConfiguration {
-    AppIntentConfiguration(kind: "Climb", intent: GameIntent.self, provider: Provider()) { entry in
+    AppIntentConfiguration(kind: "Climb", intent: ClimbIntent.self, provider: ClimbProvider()) { entry in
       ClimbView(entry: entry)
     }
     .configurationDisplayName("Climb")
-    .description("Your rank points over the last 7 days.")
+    .description("Your rank points over time: all time, 3 months, 1 month, 14 days or 7 days.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
   }
 }
@@ -482,7 +602,7 @@ struct NotLinkedView: View {
     VStack(alignment: .leading, spacing: 6) {
       MonoLabel(game.title, color: textFaint)
       Spacer(minLength: 0)
-      Text("LINK \(game == .apex ? "APEX" : "VALORANT")").font(display(24))
+      Text("Link \(game == .apex ? "Apex" : "VALORANT")").font(display(22))
       Text("Open PhamiTracker to start tracking.").font(.caption2).foregroundStyle(textDim)
     }
     .foregroundStyle(.white)
@@ -584,13 +704,13 @@ struct RPTodayView: View {
         AccessoryWidgetBackground()
         VStack(spacing: -2) {
           Text(signed(today.delta)).font(display(20)).minimumScaleFactor(0.5)
-          Text(entry.game.unit).font(.system(size: 9, weight: .medium, design: .monospaced))
+          Text(entry.game.unit).font(roboto(9, .medium).monospacedDigit())
         }
       }
       .widgetAccentable()
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 1) {
-        Text("TODAY · \(today.matches) GAMES").font(.system(size: 10, weight: .medium, design: .monospaced))
+        Text("Today · \(today.matches) games").font(roboto(10, .medium).monospacedDigit())
         Text("\(signed(today.delta)) \(entry.game.unit)").font(display(26)).widgetAccentable()
         Text("\(today.wins)W \(today.losses)L").font(.caption2)
       }
@@ -624,7 +744,7 @@ struct RPTodayView: View {
         Text(entry.game.unit).font(display(16, .bold)).foregroundStyle(textDim)
       }
       Text(today.best.map { "Net \(entry.game.unit) · best \(signed($0))" } ?? "No games yet")
-        .font(.system(size: 12))
+        .font(roboto(12))
         .foregroundStyle(textDim)
       Spacer(minLength: 4)
       if let series = today.series, !series.isEmpty {
@@ -640,7 +760,7 @@ struct RPTodayView: View {
       Spacer(minLength: 0)
       HStack(spacing: 8) {
         RankIcon(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 30)
-        Text((entry.snapshot?.rankLabel ?? "—").uppercased()).font(display(20)).lineLimit(1).minimumScaleFactor(0.6)
+        Text(entry.snapshot?.rankLabel ?? "—").font(display(20)).lineLimit(1).minimumScaleFactor(0.6)
       }
       if let score = entry.snapshot?.score {
         Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
@@ -683,7 +803,7 @@ struct RankGoalView: View {
       .gaugeStyle(.accessoryCircularCapacity)
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 2) {
-        Text(entry.goal.map { "→ \($0.label.uppercased())" } ?? "NO GOAL SET").font(display(17))
+        Text(entry.goal.map { "→ \($0.label)" } ?? "No goal set").font(display(17))
         ProgressView(value: progress).widgetAccentable()
         Text(entry.goal == nil ? entry.game.title : "\(remaining.formatted()) \(entry.game.unit) to go").font(.caption2)
       }
@@ -703,12 +823,12 @@ struct RankGoalView: View {
     HStack(alignment: .top, spacing: 16) {
       VStack(alignment: .leading, spacing: 6) {
         HStack(spacing: 6) {
-          Image(systemName: "shield.fill").font(.system(size: 10)).foregroundStyle(textDim)
+          Image(systemName: "shield.fill").font(roboto(10)).foregroundStyle(textDim)
           MonoLabel("Current rank", size: 10)
         }
         HStack(spacing: 8) {
           RankIcon(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 30)
-          Text((entry.snapshot?.rankLabel ?? "—").uppercased()).font(display(21)).lineLimit(1).minimumScaleFactor(0.6)
+          Text(entry.snapshot?.rankLabel ?? "—").font(display(21)).lineLimit(1).minimumScaleFactor(0.6)
         }
         Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
           .font(display(24, .bold))
@@ -724,27 +844,27 @@ struct RankGoalView: View {
 
       VStack(alignment: .leading, spacing: 6) {
         HStack(spacing: 6) {
-          Image(systemName: "scope").font(.system(size: 10)).foregroundStyle(textDim)
+          Image(systemName: "scope").font(roboto(10)).foregroundStyle(textDim)
           MonoLabel("Rank goal", size: 10)
         }
         if let goal = entry.goal {
-          Text(goal.label.uppercased()).font(display(21)).foregroundStyle(goalSoft).lineLimit(1).minimumScaleFactor(0.6)
+          Text(goal.label).font(display(21)).foregroundStyle(goalSoft).lineLimit(1).minimumScaleFactor(0.6)
           HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(remaining == 0 ? "DONE" : remaining.formatted()).font(display(24, .bold))
-            Text("\(entry.game.unit) to go").font(.system(size: 11)).foregroundStyle(textDim).lineLimit(1)
+            Text(remaining == 0 ? "Done" : remaining.formatted()).font(display(24, .bold))
+            Text("\(entry.game.unit) to go").font(roboto(11)).foregroundStyle(textDim).lineLimit(1)
           }
           Spacer(minLength: 0)
           Text("\(score.formatted()) / \(goal.targetScore.formatted())")
-            .font(.system(size: 10, design: .monospaced))
+            .font(roboto(10).monospacedDigit())
             .foregroundStyle(textDim)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
           ProgressView(value: progress).tint(goalColor)
-          Text(paceText).font(.system(size: 11)).foregroundStyle(textDim).lineLimit(1)
+          Text(paceText).font(roboto(11)).foregroundStyle(textDim).lineLimit(1)
         } else {
-          Text("SET A GOAL").font(display(21)).foregroundStyle(goalSoft)
+          Text("Set a goal").font(display(21)).foregroundStyle(goalSoft)
           Spacer(minLength: 0)
-          Text("Open the app and tap Rank goal.").font(.system(size: 11)).foregroundStyle(textDim)
+          Text("Open the app and tap Rank goal.").font(roboto(11)).foregroundStyle(textDim)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -778,14 +898,14 @@ struct RankGoalView: View {
           GaugeDial(progress: progress)
           VStack(spacing: 0) {
             Text(remaining == 0 ? "✓" : remaining.formatted()).font(display(24)).minimumScaleFactor(0.5).lineLimit(1)
-            Text("\(entry.game.unit) TO GO").font(.system(size: 7, weight: .medium, design: .monospaced)).foregroundStyle(textDim)
+            Text("\(entry.game.unit) to go").font(roboto(7, .medium).monospacedDigit()).foregroundStyle(textDim)
           }
           .padding(.horizontal, 26)
         }
-        Text(goal.label.uppercased()).font(display(14)).foregroundStyle(goalSoft).lineLimit(1)
+        Text(goal.label).font(display(14)).foregroundStyle(goalSoft).lineLimit(1)
       } else {
         Spacer()
-        Text("SET A GOAL").font(display(20)).foregroundStyle(goalSoft)
+        Text("Set a goal").font(display(20)).foregroundStyle(goalSoft)
         Text("In the app").font(.caption2).foregroundStyle(textDim)
         Spacer()
       }
@@ -858,7 +978,7 @@ struct ClimbView: View {
         HStack {
           Text("\(signed(weekDelta)) \(entry.game.unit)").font(display(16))
           Spacer(minLength: 0)
-          Text("7D").font(.system(size: 10, weight: .medium, design: .monospaced))
+          Text(entry.climbRange.short).font(roboto(10, .medium).monospacedDigit())
         }
         ClimbChart(entry: entry, showGoal: false, lineWidth: 2).widgetAccentable()
       }
@@ -866,7 +986,7 @@ struct ClimbView: View {
       NotLinkedView(game: entry.game)
     } else if (entry.snapshot?.chartPoints.count ?? 0) < 2 {
       VStack(alignment: .leading) {
-        MonoLabel("Climb · 7 days", color: textFaint, size: 10)
+        MonoLabel("Climb · \(entry.climbRange.title)", color: textFaint, size: 10)
         Spacer()
         Text("Your climb shows up here after a few games.").font(.caption).foregroundStyle(textDim)
       }
@@ -874,7 +994,7 @@ struct ClimbView: View {
     } else {
       VStack(alignment: .leading, spacing: 6) {
         HStack {
-          MonoLabel("Climb · 7 days", color: textFaint, size: 10)
+          MonoLabel("Climb · \(entry.climbRange.title)", color: textFaint, size: 10)
           Spacer(minLength: 4)
           Text("\(signed(weekDelta)) \(entry.game.unit)")
             .font(display(15, .bold))
@@ -884,13 +1004,13 @@ struct ClimbView: View {
           if family != .systemSmall {
             RankIcon(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 26)
           }
-          Text((entry.snapshot?.rankLabel ?? "—").uppercased())
+          Text(entry.snapshot?.rankLabel ?? "—")
             .font(display(family == .systemSmall ? 18 : 22))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
           if family != .systemSmall, let score = entry.snapshot?.score {
             Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
-              .font(.system(size: 12, design: .monospaced))
+              .font(roboto(12).monospacedDigit())
               .foregroundStyle(textDim)
           }
         }
@@ -903,17 +1023,17 @@ struct ClimbView: View {
 
   var recentMatches: some View {
     VStack(spacing: 8) {
-      ForEach(Array((entry.snapshot?.matches ?? []).prefix(4).enumerated()), id: \.offset) { _, match in
+      ForEach(Array((entry.snapshot?.matches ?? []).prefix(5).enumerated()), id: \.offset) { _, match in
         let title = [match.legend ?? match.agent, match.map].compactMap { $0 }.joined(separator: " · ")
         let color = match.kind == "adjust" ? textDim : deltaColor(match.delta)
         HStack(spacing: 10) {
           RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 3, height: 22)
-          Text((title.isEmpty ? "Ranked match" : title).uppercased())
+          Text(title.isEmpty ? "Ranked match" : title)
             .font(display(14, .bold))
             .lineLimit(1)
           Spacer()
-          Text(Date(timeIntervalSince1970: match.ts / 1000), style: .time)
-            .font(.system(size: 10, design: .monospaced))
+          Text(matchDate(Date(timeIntervalSince1970: match.ts / 1000)))
+            .font(roboto(10).monospacedDigit())
             .foregroundStyle(textDim)
           Text(signed(match.delta))
             .font(display(15, .bold))
@@ -980,13 +1100,13 @@ struct MapRotationView: View {
       }
     case .accessoryRectangular:
       VStack(alignment: .leading, spacing: 1) {
-        Text(entry.mode.title).font(.system(size: 10, weight: .medium, design: .monospaced))
-        Text((entry.current ?? "—").uppercased()).font(display(20)).lineLimit(1).widgetAccentable()
+        Text(entry.mode.title).font(roboto(10, .medium).monospacedDigit())
+        Text(entry.current ?? "—").font(display(20)).lineLimit(1).widgetAccentable()
         HStack(spacing: 4) {
           countdown
           if let next = entry.next { Text("→ \(next)").lineLimit(1) }
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(roboto(11).monospacedDigit())
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     default:
@@ -1007,15 +1127,15 @@ struct MapRotationView: View {
           Circle().fill(accent).frame(width: 6, height: 6)
           MonoLabel("Now playing", color: accent, size: 10)
         }
-        Text((entry.current ?? "—").uppercased())
+        Text(entry.current ?? "—")
           .font(display(family == .systemSmall ? 28 : 34))
           .lineLimit(1)
           .minimumScaleFactor(0.5)
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-          countdown.font(.system(size: family == .systemSmall ? 16 : 20, weight: .medium, design: .monospaced))
+          countdown.font(roboto(family == .systemSmall ? 16 : 20, .medium).monospacedDigit())
           if let end = entry.end, family == .systemMedium {
             Text("Ends \(end.formatted(date: .omitted, time: .shortened))")
-              .font(.system(size: 10, design: .monospaced))
+              .font(roboto(10).monospacedDigit())
               .foregroundStyle(textDim)
           }
         }

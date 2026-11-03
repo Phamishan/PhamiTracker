@@ -100,6 +100,12 @@ class TrackerApi {
     return PlayerSummary.fromJson(json);
   }
 
+  /// Daily scores for the climb chart. `days: 0` = since the account was linked.
+  Future<List<DayPoint>> history(String playerId, int days) async {
+    final json = await _send('GET', '/v1/players/$playerId/history', query: {'days': '$days', 'tzOffset': '$_tzOffset'});
+    return [for (final d in (json['history'] as List? ?? const [])) DayPoint.fromJson(d as Map<String, dynamic>)];
+  }
+
   Future<void> unlink(String playerId) => _send('DELETE', '/v1/players/$playerId');
 
   Future<MapRotation> apexMaps() async => MapRotation.fromJson(await _send('GET', '/v1/apex/maps'));

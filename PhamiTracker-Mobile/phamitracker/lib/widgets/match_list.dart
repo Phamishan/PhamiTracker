@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -6,9 +8,12 @@ import '../models/summary.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
 
-/// Every rank change the worker picked up, newest first.
+/// Every rank change the worker picked up, newest first. Shows five, scrolls for the rest.
 class MatchList extends StatelessWidget {
   const MatchList({super.key, required this.game, required this.matches});
+
+  static const visibleRows = 5;
+  static const rowHeight = 64.0;
 
   final Game game;
   final List<MatchEntry> matches;
@@ -25,13 +30,17 @@ class MatchList extends StatelessWidget {
     }
     return TrackerCard(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        children: [
-          for (final (i, match) in matches.indexed) ...[
-            if (i > 0) const Divider(height: 1, indent: 18, endIndent: 18, color: AppColors.border),
-            _MatchTile(game: game, match: match),
-          ],
-        ],
+      child: SizedBox(
+        height: rowHeight * math.min(matches.length, visibleRows),
+        child: Scrollbar(
+          child: ListView.separated(
+            padding: EdgeInsets.zero,
+            physics: const ClampingScrollPhysics(),
+            itemCount: matches.length,
+            separatorBuilder: (_, _) => const Divider(height: 1, indent: 18, endIndent: 18, color: AppColors.border),
+            itemBuilder: (context, i) => SizedBox(height: rowHeight - 1, child: _MatchTile(game: game, match: matches[i])),
+          ),
+        ),
       ),
     );
   }
@@ -50,45 +59,46 @@ class _MatchTile extends StatelessWidget {
         ? 'Rank adjustment'
         : [match.character, match.map].nonNulls.join(' · ').ifEmpty('Ranked match');
     final details = [
-      _when(match.time),
+      matchDate(match.time),
       if (match.kills != null) '${match.kills}/${match.deaths}/${match.assists}',
       if (match.roundsWon != null) '${match.roundsWon}–${match.roundsLost}',
     ].join('  ·  ');
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
         children: [
           // Result stripe: green win, red loss.
-          Container(width: 3, height: 34, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+          Container(width: 3, height: 32, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.display(18, weight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(details.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.label(size: 10)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(16, weight: FontWeight.w500)),
+                const SizedBox(height: 3),
+                Text(details, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.label(size: 12)),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          Text('${signed(match.delta)} ${game.unit}', style: AppText.display(20, color: color, weight: FontWeight.w700)),
+          Text('${signed(match.delta)} ${game.unit}', style: AppText.display(17, color: color)),
         ],
       ),
     );
   }
+}
 
-  static String _when(DateTime time) {
-    final now = DateTime.now();
-    final sameDay = time.year == now.year && time.month == now.month && time.day == now.day;
-    return sameDay ? DateFormat.Hm().format(time) : DateFormat('d MMM HH:mm').format(time);
-  }
+/// "Today, 13:48", "Yesterday, 21:02", "Sun 1 Nov, 18:30" (with the year once it isn't this year).
+String matchDate(DateTime time, {DateTime? now}) {
+  final today = DateUtils.dateOnly(now ?? DateTime.now());
+  final day = DateUtils.dateOnly(time);
+  final clock = DateFormat.Hm().format(time);
+  if (day == today) return 'Today, $clock';
+  if (day == today.subtract(const Duration(days: 1))) return 'Yesterday, $clock';
+  final date = day.year == today.year ? DateFormat('EEE d MMM') : DateFormat('d MMM yyyy');
+  return '${date.format(time)}, $clock';
 }
 
 /// RP/RR won or lost per map, the "which map am I bad at" view.
@@ -113,18 +123,18 @@ class MapStatsCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(stat.map.toUpperCase(), style: AppText.display(18, weight: FontWeight.w700)),
+                      Text(stat.map, style: AppText.display(16, weight: FontWeight.w500)),
                       const SizedBox(height: 3),
                       Text(
-                        '${stat.matches} GAMES · ${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
-                        style: AppText.label(size: 10),
+                        '${stat.matches} games · ${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'gains' : 'wins'}',
+                        style: AppText.label(size: 12),
                       ),
                     ],
                   ),
                 ),
                 Text(
                   '${signed(stat.delta)} ${game.unit}',
-                  style: AppText.display(20, color: AppColors.delta(stat.delta), weight: FontWeight.w700),
+                  style: AppText.display(17, color: AppColors.delta(stat.delta)),
                 ),
               ],
             ),
@@ -208,7 +218,8 @@ class _RotationTile extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Colors.black.withValues(alpha: 0.25), Colors.black.withValues(alpha: 0.85)],
+              colors: [Colors.black.withValues(alpha: 0), Colors.black.withValues(alpha: 0.6)],
+              stops: const [0.35, 1],
             ),
           ),
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
@@ -220,15 +231,19 @@ class _RotationTile extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
+                      color: Colors.black.withValues(alpha: 0.35),
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: Text(label.toUpperCase(), style: AppText.label(color: AppColors.text, size: 10)),
+                    child: Text(label, style: AppText.label(color: Colors.white, size: 12)),
                   ),
                   const Spacer(),
                   if (pair.next != null)
-                    Text('NEXT: ${pair.next!.map.toUpperCase()}', style: AppText.label(color: AppColors.textDim, size: 10)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.35), borderRadius: BorderRadius.circular(99)),
+                      child: Text('Next: ${pair.next!.map}', style: AppText.label(color: Colors.white, size: 12)),
+                    ),
                 ],
               ),
               const Spacer(),
@@ -237,15 +252,17 @@ class _RotationTile extends StatelessWidget {
                   children: [
                     const LiveDot(color: AppColors.accent, size: 7),
                     const SizedBox(width: 8),
-                    Text('NOW PLAYING', style: AppText.label(color: AppColors.accent, size: 10)),
+                    Text('Now playing', style: AppText.label(color: Colors.white, size: 12)),
                   ],
                 ),
               const SizedBox(height: 4),
               Text(
-                name.toUpperCase(),
+                name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppText.display(large ? 36 : 26),
+                style: AppText.display(large ? 30 : 22, color: Colors.white).copyWith(
+                  shadows: const [Shadow(color: Colors.black54, blurRadius: 12)],
+                ),
               ),
               if (remaining != null && !remaining.isNegative) ...[
                 const SizedBox(height: 4),
@@ -253,11 +270,11 @@ class _RotationTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(_countdown(remaining), style: AppText.mono(color: AppColors.text, size: large ? 22 : 16)),
+                    Text(_countdown(remaining), style: AppText.mono(color: Colors.white, size: large ? 20 : 15)),
                     const SizedBox(width: 10),
                     Text(
                       'Ends ${DateFormat.jm().format(current.end!)}',
-                      style: AppText.mono(size: 11),
+                      style: AppText.mono(color: Colors.white70, size: 12),
                     ),
                   ],
                 ),
