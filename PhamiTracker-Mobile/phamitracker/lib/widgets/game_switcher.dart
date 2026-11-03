@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/game.dart';
 import '../theme/app_theme.dart';
 
-/// Segmented pill for switching games. The selected game lights up in its own gradient.
+/// Segmented control for switching games. The selected segment lifts onto a lighter surface.
 class GameSwitcher extends StatelessWidget {
   const GameSwitcher({super.key, required this.selected, required this.onChanged, this.linked = const {}});
 
@@ -19,7 +19,7 @@ class GameSwitcher extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(99),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
@@ -30,33 +30,29 @@ class GameSwitcher extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: () => onChanged(game),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 260),
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
-                  height: 42,
+                  height: 40,
                   decoration: BoxDecoration(
-                    gradient: game == selected ? game.linearGradient : null,
-                    borderRadius: BorderRadius.circular(99),
+                    color: game == selected ? AppColors.surfaceHigh : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: game == selected ? AppColors.border : Colors.transparent),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(game.icon, size: 18, color: game == selected ? Colors.white : AppColors.textDim),
-                      const SizedBox(width: 6),
+                      Icon(game.icon, size: 16, color: game == selected ? game.glow : AppColors.textFaint),
+                      const SizedBox(width: 8),
                       Text(
                         game.shortTitle,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.1,
-                          fontSize: 13,
-                          color: game == selected ? Colors.white : AppColors.textDim,
-                        ),
+                        style: AppText.label(color: game == selected ? AppColors.text : AppColors.textFaint),
                       ),
                       if (linked.contains(game) && game != selected) ...[
                         const SizedBox(width: 6),
                         Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(color: game.glow, shape: BoxShape.circle),
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(color: AppColors.gain, shape: BoxShape.circle),
                         ),
                       ],
                     ],

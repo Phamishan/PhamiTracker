@@ -58,7 +58,7 @@ class HistoryChart extends StatelessWidget {
             padding: const EdgeInsets.only(left: 10, bottom: 12),
             child: Row(
               children: [
-                Text('${history.length} days', style: const TextStyle(color: AppColors.textDim, fontWeight: FontWeight.w700)),
+                Text('${history.length} DAYS', style: AppText.label()),
                 const Spacer(),
                 DeltaChip(total, unit: game.unit),
               ],
@@ -86,7 +86,7 @@ class HistoryChart extends StatelessWidget {
                           ? const SizedBox.shrink()
                           : Text(
                               NumberFormat.compact().format(value),
-                              style: const TextStyle(color: AppColors.textDim, fontSize: 11),
+                              style: AppText.mono(size: 10, color: AppColors.textFaint),
                             ),
                     ),
                   ),
@@ -101,7 +101,7 @@ class HistoryChart extends StatelessWidget {
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             dayFormat.format(history[i].day),
-                            style: const TextStyle(color: AppColors.textDim, fontSize: 11),
+                            style: AppText.mono(size: 10, color: AppColors.textFaint),
                           ),
                         );
                       },
@@ -113,13 +113,13 @@ class HistoryChart extends StatelessWidget {
                     if (showGoal)
                       HorizontalLine(
                         y: goalY,
-                        color: AppColors.purple.withValues(alpha: 0.8),
+                        color: AppColors.goal.withValues(alpha: 0.8),
                         strokeWidth: 1.5,
                         dashArray: [6, 5],
                         label: HorizontalLineLabel(
                           show: true,
                           alignment: Alignment.topLeft,
-                          style: const TextStyle(color: AppColors.purple, fontWeight: FontWeight.w800, fontSize: 11),
+                          style: AppText.label(color: AppColors.goal, size: 10),
                           labelResolver: (_) => goal!.label,
                         ),
                       ),
@@ -145,14 +145,14 @@ class HistoryChart extends StatelessWidget {
                     isCurved: true,
                     preventCurveOverShooting: true,
                     barWidth: 3.5,
-                    gradient: LinearGradient(colors: game.gradient),
+                    color: game.glow,
                     dotData: FlDotData(
                       checkToShowDot: (spot, _) => spot == points.last,
                       getDotPainter: (_, _, _, _) => FlDotCirclePainter(
                         radius: 5,
                         color: Colors.white,
                         strokeWidth: 3,
-                        strokeColor: game.gradient.last,
+                        strokeColor: game.glow,
                       ),
                     ),
                     belowBarData: BarAreaData(

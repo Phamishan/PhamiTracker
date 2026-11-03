@@ -53,6 +53,8 @@ class WidgetBridge {
       'today': {'delta': s.today.delta, 'matches': s.today.matches, 'wins': s.today.wins, 'losses': s.today.losses},
       'status': {'online': s.status.online, 'inGame': s.status.inGame},
       'polledAt': s.polledAt?.millisecondsSinceEpoch,
+      if (s.season?.splitEnd != null)
+        'season': {'season': s.season!.name, 'split': s.season!.split, 'splitEnd': s.season!.splitEnd!.millisecondsSinceEpoch},
       'history': [
         for (final d in s.history.skip(s.history.length > 7 ? s.history.length - 7 : 0))
           {'day': d.day.toIso8601String().substring(0, 10), 'score': d.score, 'delta': d.delta},

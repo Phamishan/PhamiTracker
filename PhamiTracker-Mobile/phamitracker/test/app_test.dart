@@ -19,7 +19,7 @@ Map<String, dynamic> apexSummary() => {
       'rankLabel': 'Platinum I',
       'rank': {'name': 'Platinum', 'div': 1},
       'status': {'online': true, 'inGame': true, 'legend': 'Wraith'},
-      'today': {'delta': 184, 'matches': 3, 'wins': 2, 'losses': 1, 'best': 141, 'worst': -35},
+      'today': {'delta': 184, 'matches': 3, 'wins': 2, 'losses': 1, 'best': 141, 'worst': -35, 'series': [78, 43, 184]},
       'history': [
         {'day': '2026-11-01', 'score': 10716, 'delta': 0, 'matches': 0},
         {'day': '2026-11-02', 'score': 10900, 'delta': 184, 'matches': 3},
@@ -108,16 +108,18 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Platinum I'), findsOneWidget);
-    // Today tile, the chart's total and the Olympus row.
-    expect(find.textContaining('+184', findRichText: true), findsNWidgets(3));
-    expect(find.text('Set a goal'), findsOneWidget);
-    expect(find.textContaining('In match · Wraith'), findsOneWidget);
+    expect(find.text('PLATINUM I'), findsOneWidget);
+    expect(find.text('10,900 RP'), findsOneWidget);
+    // Rank card's today line, Today tile, the chart's total and the Olympus row.
+    expect(find.textContaining('+184', findRichText: true), findsNWidgets(4));
+    expect(find.text('SET A GOAL'), findsOneWidget);
+    expect(find.text('IN MATCH · WRAITH'), findsOneWidget);
+    expect(find.text('2W'), findsOneWidget);
 
     await tester.tap(find.text('VALORANT'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Track your VALORANT rank'), findsOneWidget);
+    expect(find.text('TRACK YOUR VALORANT RANK'), findsOneWidget);
 
     // Unmount so the live-refresh timer is cancelled.
     await tester.pumpWidget(const SizedBox());

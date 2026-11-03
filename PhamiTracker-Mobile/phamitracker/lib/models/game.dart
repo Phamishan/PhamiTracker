@@ -9,8 +9,8 @@ enum Game {
     shortTitle: 'APEX',
     unit: 'RP',
     icon: Icons.local_fire_department_rounded,
-    gradient: [Color(0xFFF5A35C), Color(0xFFD9772F)],
-    glow: Color(0xFFF08C45),
+    gradient: [Color(0xFFEF6A4F), Color(0xFFC9402C)],
+    glow: Color(0xFFE5533D),
   ),
   valorant(
     id: 'valorant',
@@ -18,8 +18,8 @@ enum Game {
     shortTitle: 'VALORANT',
     unit: 'RR',
     icon: Icons.change_history_rounded,
-    gradient: [Color(0xFF9E8CFF), Color(0xFF6B55D9)],
-    glow: Color(0xFF8B78F2),
+    gradient: [Color(0xFFFF5A67), Color(0xFFD63A48)],
+    glow: Color(0xFFFF4655),
   );
 
   const Game({

@@ -60,7 +60,6 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
-          _GameGlow(game: game),
           SafeArea(
             bottom: false,
             child: RefreshIndicator(
@@ -131,22 +130,21 @@ class _Dashboard extends StatelessWidget {
           _ErrorBanner(message: state.error!),
           const SizedBox(height: 12),
         ],
-        RankHero(game: game, summary: summary, accountName: account.displayName),
-        const SizedBox(height: 14),
+        RankHero(
+          game: game,
+          summary: summary,
+          accountName: account.displayName,
+          goal: state.goal,
+          onGoalTap: () => showGoalSheet(context, game),
+        ),
+        const SizedBox(height: 12),
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(child: TodayTile(game: game, today: summary?.today ?? const TodayStats())),
-              const SizedBox(width: 14),
-              Expanded(
-                child: GoalTile(
-                  game: game,
-                  goal: state.goal,
-                  score: summary?.score,
-                  onTap: () => showGoalSheet(context, game),
-                ),
-              ),
+              const SizedBox(width: 12),
+              Expanded(child: SessionTile(today: summary?.today ?? const TodayStats())),
             ],
           ),
         ),
@@ -177,13 +175,9 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        ShaderMask(
-          shaderCallback: (rect) => const LinearGradient(colors: [AppColors.orange, AppColors.purple]).createShader(rect),
-          child: const Text(
-            'PhamiTracker',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.white),
-          ),
-        ),
+        Text('PHAMITRACKER', style: AppText.display(30)),
+        const SizedBox(width: 8),
+        Container(width: 7, height: 7, decoration: BoxDecoration(color: game.glow, shape: BoxShape.circle)),
         const Spacer(),
         IconButton.filledTonal(
           style: IconButton.styleFrom(backgroundColor: AppColors.surfaceHigh),
@@ -191,31 +185,6 @@ class _Header extends StatelessWidget {
           icon: const Icon(Icons.tune_rounded, color: AppColors.text),
         ),
       ],
-    );
-  }
-}
-
-/// Soft colour wash behind the content that follows the selected game.
-class _GameGlow extends StatelessWidget {
-  const _GameGlow({required this.game});
-
-  final Game game;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(end: game.glow),
-      duration: const Duration(milliseconds: 500),
-      builder: (context, color, _) => Container(
-        height: 420,
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0.6, -1.1),
-            radius: 1.2,
-            colors: [(color ?? game.glow).withValues(alpha: 0.12), Colors.transparent],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -229,17 +198,12 @@ class _LinkPrompt extends StatelessWidget {
   Widget build(BuildContext context) {
     return TrackerCard(
       padding: const EdgeInsets.all(24),
-      gradient: LinearGradient(
-        colors: [game.glow.withValues(alpha: 0.14), AppColors.surface],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(game.icon, size: 40, color: game.glow),
           const SizedBox(height: 14),
-          Text('Track your ${game.title} rank', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          Text('TRACK YOUR ${game.title.toUpperCase()} RANK', style: AppText.display(28)),
           const SizedBox(height: 8),
           Text(
             'Link your account and every ranked game is logged in the cloud, minute by minute, '
@@ -301,10 +265,7 @@ class GradientButton extends StatelessWidget {
     return Opacity(
       opacity: onPressed == null ? 0.6 : 1,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: game.linearGradient,
-          borderRadius: BorderRadius.circular(18),
-                  ),
+        decoration: BoxDecoration(color: game.glow, borderRadius: BorderRadius.circular(16)),
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
@@ -315,7 +276,7 @@ class GradientButton extends StatelessWidget {
               child: Center(
                 child: busy
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                    : Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white)),
+                    : Text(label.toUpperCase(), style: AppText.display(20, color: Colors.white, weight: FontWeight.w700)),
               ),
             ),
           ),

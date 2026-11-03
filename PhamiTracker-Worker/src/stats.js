@@ -54,6 +54,11 @@ export function summarize(matches, currentScore, { tzOffset = 0, days = 14, now 
       best: todayMatches.length ? Math.max(...todayMatches.map((m) => m.delta)) : null,
       worst: todayMatches.length ? Math.min(...todayMatches.map((m) => m.delta)) : null,
       startScore: currentScore == null ? null : currentScore - (byDay.get(today)?.total ?? 0),
+      // Running total after each of today's games, oldest first (the Today sparkline).
+      series: todayMatches
+        .slice()
+        .reverse()
+        .reduce((acc, m) => [...acc, (acc.at(-1) ?? 0) + m.delta], []),
     },
     history,
     maps: mapStats(sorted),

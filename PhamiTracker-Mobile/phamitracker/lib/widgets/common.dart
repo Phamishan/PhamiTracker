@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../services/app_state.dart';
@@ -10,25 +12,49 @@ class AppScope extends InheritedNotifier<AppState> {
   static AppState of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }
 
-/// Rounded dark card with a faint border, the base of every dashboard tile.
+/// Graphite card (top-lit gradient, hairline border), the base of every dashboard tile.
 class TrackerCard extends StatelessWidget {
-  const TrackerCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.gradient});
+  const TrackerCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.onTap});
 
   final Widget child;
   final EdgeInsetsGeometry padding;
-  final Gradient? gradient;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: gradient == null ? AppColors.surface : null,
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(24),
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(color: AppColors.border),
       ),
       child: child,
+    );
+    return onTap == null ? card : GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: card);
+  }
+}
+
+/// Mono uppercase label, optionally with a leading icon: `◎ RANK GOAL`.
+class CardLabel extends StatelessWidget {
+  const CardLabel(this.text, {super.key, this.icon, this.color = AppColors.textDim, this.trailing});
+
+  final String text;
+  final IconData? icon;
+  final Color color;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+        ],
+        Flexible(child: Text(text.toUpperCase(), style: AppText.label(color: color), overflow: TextOverflow.ellipsis)),
+        if (trailing != null) ...[const Spacer(), trailing!],
+      ],
     );
   }
 }
@@ -42,27 +68,13 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
-      child: Row(
-        children: [
-          Text(
-            title.toUpperCase(),
-            style: const TextStyle(
-              color: AppColors.textDim,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const Spacer(),
-          ?trailing,
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(6, 26, 6, 10),
+      child: CardLabel(title, color: AppColors.textFaint, trailing: trailing),
     );
   }
 }
 
-/// Small rounded "+24 RP" style pill coloured by sign.
+/// `+24 RP` in green, `-35 RP` in red.
 class DeltaChip extends StatelessWidget {
   const DeltaChip(this.delta, {super.key, this.unit, this.large = false});
 
@@ -74,17 +86,17 @@ class DeltaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = AppColors.delta(delta);
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: large ? 12 : 9, vertical: large ? 6 : 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(99)),
+      padding: EdgeInsets.symmetric(horizontal: large ? 12 : 9, vertical: large ? 5 : 3),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
       child: Text(
         unit == null ? signed(delta) : '${signed(delta)} $unit',
-        style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: large ? 15 : 13),
+        style: AppText.display(large ? 18 : 16, color: color, weight: FontWeight.w700),
       ),
     );
   }
 }
 
-/// Pulsing green dot for "live" / "in match".
+/// Pulsing dot for "live" / "now playing".
 class LiveDot extends StatefulWidget {
   const LiveDot({super.key, this.color = AppColors.live, this.size = 8});
 
@@ -112,14 +124,185 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
       child: Container(
         width: widget.size,
         height: widget.size,
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.4), blurRadius: 6)],
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+/// Thin progress bar on a dark track (goal progress, map rotation time).
+class ProgressBar extends StatelessWidget {
+  const ProgressBar({super.key, required this.value, this.color = AppColors.goal, this.height = 8});
+
+  final double value;
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(99),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: value.clamp(0, 1)),
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeOutCubic,
+        builder: (context, v, _) => LinearProgressIndicator(
+          value: v,
+          minHeight: height,
+          backgroundColor: AppColors.surfaceHigh,
+          color: color,
         ),
       ),
     );
   }
+}
+
+/// Little line chart with a soft fill and a dot on the latest value.
+class Sparkline extends StatelessWidget {
+  const Sparkline({super.key, required this.values, this.color = AppColors.accent, this.height = 54});
+
+  final List<num> values;
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(height: height, width: double.infinity, child: CustomPaint(painter: _SparklinePainter(values, color)));
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter(this.values, this.color);
+
+  final List<num> values;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // A single game still gets a line: start it from zero.
+    final points = [if (values.length == 1) 0.0, for (final v in values) v.toDouble()];
+    if (points.length < 2) return;
+    final lo = points.reduce(math.min);
+    final hi = points.reduce(math.max);
+    final span = (hi - lo).abs() < 1 ? 1.0 : hi - lo;
+    const dot = 5.0;
+    final w = size.width - dot;
+    final h = size.height - dot * 2;
+    Offset at(int i) => Offset(w * i / (points.length - 1), dot + h - (points[i] - lo) / span * h);
+
+    final line = Path()..moveTo(at(0).dx, at(0).dy);
+    for (var i = 1; i < points.length; i++) {
+      line.lineTo(at(i).dx, at(i).dy);
+    }
+    final fill = Path.from(line)
+      ..lineTo(at(points.length - 1).dx, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withValues(alpha: 0.22), color.withValues(alpha: 0)],
+        ).createShader(Offset.zero & size),
+    );
+    canvas.drawPath(
+      line,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
+        ..color = color,
+    );
+    canvas.drawCircle(at(points.length - 1), dot, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) => old.values != values || old.color != color;
+}
+
+/// Ring gauge with tick marks around it, like a dial.
+class GaugeRing extends StatelessWidget {
+  const GaugeRing({super.key, required this.progress, this.color = AppColors.goal, required this.child, this.size = 150});
+
+  final double progress;
+  final Color color;
+  final Widget child;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: progress.clamp(0, 1)),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, _) => CustomPaint(
+          painter: _GaugePainter(value, color),
+          child: Center(child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _GaugePainter extends CustomPainter {
+  _GaugePainter(this.progress, this.color);
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width / 2;
+    // Tick marks: every 5th one longer.
+    for (var i = 0; i < 60; i++) {
+      final a = -math.pi / 2 + i * math.pi * 2 / 60;
+      final major = i % 5 == 0;
+      final outer = r - 2;
+      final inner = outer - (major ? 9 : 5);
+      final lit = i / 60 < progress;
+      canvas.drawLine(
+        c + Offset(math.cos(a), math.sin(a)) * inner,
+        c + Offset(math.cos(a), math.sin(a)) * outer,
+        Paint()
+          ..strokeWidth = major ? 2 : 1.2
+          ..strokeCap = StrokeCap.round
+          ..color = lit ? color.withValues(alpha: 0.75) : Colors.white.withValues(alpha: major ? 0.22 : 0.12),
+      );
+    }
+    final arcRect = Rect.fromCircle(center: c, radius: r - 20);
+    canvas.drawArc(
+      arcRect,
+      0,
+      math.pi * 2,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..color = AppColors.surfaceHigh,
+    );
+    if (progress > 0) {
+      canvas.drawArc(
+        arcRect,
+        -math.pi / 2,
+        math.pi * 2 * progress,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..strokeCap = StrokeCap.round
+          ..color = color,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GaugePainter old) => old.progress != progress || old.color != color;
 }
 
 String timeAgo(DateTime? time, {DateTime? now}) {

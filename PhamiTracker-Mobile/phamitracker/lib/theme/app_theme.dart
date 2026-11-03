@@ -1,29 +1,61 @@
 import 'package:flutter/material.dart';
 
-/// Clean dark base with two accents: orange (Apex) and purple (VALORANT).
+/// Dark graphite surfaces, one coral accent, magenta for goals, green/red for results.
 class AppColors {
-  static const background = Color(0xFF0B0B11);
-  static const surface = Color(0xFF15151E);
-  static const surfaceHigh = Color(0xFF1E1E29);
-  static const border = Color(0x14FFFFFF);
-  static const text = Color(0xFFF2F2F7);
-  static const textDim = Color(0xFF9A9AAE);
-  static const gain = Color(0xFF6CCF9C);
-  static const loss = Color(0xFFEE7C88);
-  static const live = Color(0xFF6CCF9C);
-  static const orange = Color(0xFFF08C45);
-  static const purple = Color(0xFF8B78F2);
+  static const background = Color(0xFF0C0C0E);
+  static const cardTop = Color(0xFF1F1F22);
+  static const cardBottom = Color(0xFF141416);
+  static const surface = Color(0xFF18181B);
+  static const surfaceHigh = Color(0xFF26262A);
+  static const border = Color(0x12FFFFFF);
+  static const text = Color(0xFFF4F4F5);
+  static const textDim = Color(0xFF8E8E96);
+  static const textFaint = Color(0xFF5E5E66);
+  static const accent = Color(0xFFE5533D);
+  static const goal = Color(0xFFCF4DF0);
+  static const goalSoft = Color(0xFFB98CF5);
+  static const gain = Color(0xFF4CC38A);
+  static const loss = Color(0xFFF25555);
+  static const live = Color(0xFF4CC38A);
 
   static Color delta(num value) => value > 0 ? gain : value < 0 ? loss : textDim;
+
+  static const cardGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [cardTop, cardBottom],
+  );
+}
+
+/// The three voices of the UI: mono labels, condensed display type, Barlow for everything else.
+class AppText {
+  /// `TODAY · 6 GAMES`
+  static TextStyle label({Color color = AppColors.textDim, double size = 11}) => TextStyle(
+        fontFamily: 'DMMono',
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        letterSpacing: size * 0.2,
+        color: color,
+      );
+
+  /// `13,460 / 16,000 RP`
+  static TextStyle mono({Color color = AppColors.textDim, double size = 13}) =>
+      TextStyle(fontFamily: 'DMMono', fontSize: size, color: color, fontFeatures: const [FontFeature.tabularFigures()]);
+
+  /// `DIAMOND III`, `+359`
+  static TextStyle display(double size, {Color color = AppColors.text, FontWeight weight = FontWeight.w800}) =>
+      TextStyle(fontFamily: 'BarlowCondensed', fontSize: size, fontWeight: weight, color: color, height: 1, letterSpacing: 0.2);
 }
 
 ThemeData buildTheme() {
   final base = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
+    fontFamily: 'Barlow',
     colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF8B78F2),
+      seedColor: AppColors.accent,
       brightness: Brightness.dark,
+      primary: AppColors.accent,
       surface: AppColors.surface,
     ),
     scaffoldBackgroundColor: AppColors.background,
@@ -41,6 +73,7 @@ ThemeData buildTheme() {
       showDragHandle: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
     ),
+    dialogTheme: const DialogThemeData(backgroundColor: AppColors.surface),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: AppColors.surfaceHigh,

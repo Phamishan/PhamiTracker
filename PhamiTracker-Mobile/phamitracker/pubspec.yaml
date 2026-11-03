@@ -2,7 +2,7 @@ name: phamitracker
 description: "Live rank tracker for Apex Legends and VALORANT."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1+1
 
 environment:
   sdk: ^3.13.7
@@ -61,6 +61,27 @@ flutter:
   assets:
     - assets/CHANGELOG.md
     - .env
+  fonts:
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/Barlow-Regular.ttf
+        - asset: assets/fonts/Barlow-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Barlow-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Barlow-Bold.ttf
+          weight: 700
+    - family: BarlowCondensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BarlowCondensed-ExtraBold.ttf
+          weight: 800
+    - family: DMMono
+      fonts:
+        - asset: assets/fonts/DMMono-Regular.ttf
+        - asset: assets/fonts/DMMono-Medium.ttf
+          weight: 500
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
@@ -103,22 +124,22 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/images/P.png"
   remove_alpha_ios: true
-  adaptive_icon_background: "#17131F"
+  adaptive_icon_background: "#141416"
   adaptive_icon_foreground: "assets/images/p-trans.png"
   image_path_ios_dark_transparent: "assets/images/p-trans.png"
   image_path_ios_tinted_grayscale: "assets/images/p-trans.png"
   desaturate_tinted_to_grayscale_ios: true
 
 flutter_native_splash:
-  color: "#17131F"
+  color: "#141416"
   image: "assets/images/p-trans.png"
-  color_dark: "#0B0B11"
+  color_dark: "#0C0C0E"
   image_dark: "assets/images/p-trans.png"
 
   fullscreen: true
 
   android_12:
     image: "assets/images/p-trans.png"
-    color: "#17131F"
+    color: "#141416"
     image_dark: "assets/images/p-trans.png"
-    color_dark: "#0B0B11"
+    color_dark: "#0C0C0E"

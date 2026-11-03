@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:phamitracker/models/account.dart';
 import 'package:phamitracker/models/game.dart';
 import 'package:phamitracker/models/ranks.dart';
+import 'package:phamitracker/models/summary.dart';
 
 void main() {
   test('apex ladder', () {
@@ -34,5 +35,14 @@ void main() {
     expect(goal.progress(9000), 0);
     expect(goal.remaining(10900), 500);
     expect(goal.remaining(12000), 0);
+  });
+
+  test('split pace is what you need per day to make the goal before the reset', () {
+    final now = DateTime.utc(2026, 10, 12, 18);
+    final season = SeasonInfo(name: 'Season 30 · Marked', split: 2, splitEnd: DateTime.utc(2026, 11, 3, 18));
+    expect(season.goalPace(2540, 'RP', now: now), 'Split ends in 22d · ~116 RP/day');
+    expect(season.goalPace(0, 'RP', now: now), 'Split ends in 22d');
+    expect(season.goalPace(300, 'RP', now: DateTime.utc(2026, 11, 3, 8)), 'Split ends in 10h · ~300 RP/day');
+    expect(season.goalPace(300, 'RP', now: DateTime.utc(2026, 11, 4)), isNull);
   });
 }

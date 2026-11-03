@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../models/account.dart';
 import '../models/game.dart';
 import '../models/ranks.dart';
 import '../models/summary.dart';
@@ -9,204 +10,268 @@ import 'common.dart';
 
 final _number = NumberFormat.decimalPattern();
 
-/// The big gradient card at the top: who, what rank, how many points, and whether they're live.
+/// The top card: current rank on the left, rank goal on the right.
 class RankHero extends StatelessWidget {
-  const RankHero({super.key, required this.game, required this.summary, required this.accountName});
+  const RankHero({
+    super.key,
+    required this.game,
+    required this.summary,
+    required this.accountName,
+    required this.goal,
+    required this.onGoalTap,
+  });
 
   final Game game;
   final PlayerSummary? summary;
   final String accountName;
+  final RankGoal? goal;
+  final VoidCallback onGoalTap;
 
   @override
   Widget build(BuildContext context) {
     final s = summary;
-    final rankName = s?.rankLabel ?? s?.rank.name ?? '—';
-    final color = rankColor(s?.rank.name ?? rankName);
-    final live = s != null && (s.status.inGame || s.status.online);
+    final tags = [
+      if (s?.season?.name != null) [s!.season!.name, if (s.season!.split != null) 'Split ${s.season!.split}'].join(' · '),
+      if (s?.rank.peak != null) 'Peak ${s!.rank.peak}',
+      if (s?.level != null) 'Lvl ${s!.level}',
+      if (s?.rank.ladderPos != null) '#${_number.format(s!.rank.ladderPos)}',
+      if ((s?.rank.gamesNeeded ?? 0) > 0) '${s!.rank.gamesNeeded} placements left',
+      'Updated ${timeAgo(s?.polledAt)}',
+    ];
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: AppColors.surface,
-        gradient: LinearGradient(
-          colors: [game.glow.withValues(alpha: 0.16), AppColors.surface],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          stops: const [0, 0.7],
-        ),
-        border: Border.all(color: game.glow.withValues(alpha: 0.25)),
-      ),
-      child: Stack(
+    return TrackerCard(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Big faded game glyph for texture.
-          Positioned(
-            right: -30,
-            top: -30,
-            child: Icon(game.icon, size: 190, color: game.glow.withValues(alpha: 0.06)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  accountName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDim),
+                ),
+              ),
+              _Status(status: s?.status),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1, color: AppColors.border),
+          ),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        accountName,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
-                      ),
-                    ),
-                    _StatusPill(status: s?.status, live: live),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _RankBadge(color: color, imageUrl: s?.rank.image, label: rankName),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              rankName,
-                              style: const TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                height: 1.05,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _scoreLine(s),
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textDim,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (s?.rank.ladderPos != null) _Tag(Icons.leaderboard_rounded, '#${_number.format(s!.rank.ladderPos)}'),
-                    if (s?.rank.peak != null) _Tag(Icons.trending_up_rounded, 'Peak ${s!.rank.peak}'),
-                    if (s?.level != null) _Tag(Icons.star_rounded, 'Level ${s!.level}'),
-                    if ((s?.rank.gamesNeeded ?? 0) > 0) _Tag(Icons.hourglass_bottom_rounded, '${s!.rank.gamesNeeded} placements left'),
-                    _Tag(Icons.sync_rounded, 'Updated ${timeAgo(s?.polledAt)}'),
-                  ],
+                Expanded(child: _CurrentRank(game: game, summary: s)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onGoalTap,
+                    child: _Goal(game: game, goal: goal, summary: s),
+                  ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          Text(tags.join('  ·  ').toUpperCase(), style: AppText.label(color: AppColors.textFaint, size: 10)),
         ],
       ),
     );
   }
-
-  String _scoreLine(PlayerSummary? s) {
-    if (s?.score == null) return 'Fetching rank…';
-    if (game == Game.valorant) {
-      return '${s!.rank.rr ?? 0} RR  ·  ${_number.format(s.score)} elo';
-    }
-    final next = nextRank(game, s!.score!);
-    final line = '${_number.format(s.score)} RP';
-    return next == null ? line : '$line  ·  ${_number.format(next.minScore - s.score!)} to ${next.label}';
-  }
 }
 
-class _RankBadge extends StatelessWidget {
-  const _RankBadge({required this.color, required this.imageUrl, required this.label});
+class _CurrentRank extends StatelessWidget {
+  const _CurrentRank({required this.game, required this.summary});
 
-  final Color color;
-  final String? imageUrl;
-  final String label;
+  final Game game;
+  final PlayerSummary? summary;
 
   @override
   Widget build(BuildContext context) {
-    final fallback = Center(
-      child: Text(
-        label.isEmpty ? '?' : label[0],
-        style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: color),
-      ),
+    final s = summary;
+    final rankName = (s?.rankLabel ?? s?.rank.name ?? '—').toUpperCase();
+    final score = s?.score;
+    final today = s?.today ?? const TodayStats();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const CardLabel('Current rank', icon: Icons.shield_rounded),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            RankBadge(name: s?.rank.name ?? rankName, imageUrl: s?.rank.image),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(rankName, style: AppText.display(26)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          score == null
+              ? '—'
+              : game == Game.valorant
+                  ? '${s!.rank.rr ?? 0} RR'
+                  : '${_number.format(score)} RP',
+          style: AppText.display(30, weight: FontWeight.w700),
+        ),
+        const Spacer(),
+        const SizedBox(height: 16),
+        Text('TODAY', style: AppText.label()),
+        const SizedBox(height: 4),
+        Text(
+          '${signed(today.delta)} ${game.unit} · ${today.matches} ${today.matches == 1 ? 'game' : 'games'}',
+          style: AppText.display(19, color: AppColors.delta(today.delta), weight: FontWeight.w700),
+        ),
+      ],
     );
-    return Container(
-      width: 74,
-      height: 74,
+  }
+}
+
+class _Goal extends StatelessWidget {
+  const _Goal({required this.game, required this.goal, required this.summary});
+
+  final Game game;
+  final RankGoal? goal;
+  final PlayerSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final goal = this.goal;
+    final score = summary?.score;
+    if (goal == null) {
+      final suggestion = score == null ? null : nextRank(game, score);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CardLabel('Rank goal', icon: Icons.gps_fixed_rounded),
+          const SizedBox(height: 14),
+          Text('SET A GOAL', style: AppText.display(26, color: AppColors.goalSoft)),
+          const SizedBox(height: 10),
+          Text(
+            suggestion == null ? 'Pick the rank you\'re grinding for.' : 'Next up: ${suggestion.label}',
+            style: const TextStyle(color: AppColors.textDim),
+          ),
+          const Spacer(),
+          const Icon(Icons.add_circle_outline_rounded, color: AppColors.goal),
+        ],
+      );
+    }
+
+    final current = score ?? goal.startScore;
+    final remaining = goal.remaining(current);
+    final pace = summary?.pacePerDay;
+    final days = pace != null && pace > 0 && remaining > 0 ? (remaining / pace).ceil() : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const CardLabel('Rank goal', icon: Icons.gps_fixed_rounded),
+        const SizedBox(height: 14),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(goal.label.toUpperCase(), style: AppText.display(26, color: AppColors.goalSoft)),
+        ),
+        const SizedBox(height: 12),
+        if (remaining == 0)
+          Text('REACHED', style: AppText.display(30, color: AppColors.gain, weight: FontWeight.w700))
+        else
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(text: _number.format(remaining), style: AppText.display(30, weight: FontWeight.w700)),
+              TextSpan(text: '  ${game.unit} to go', style: const TextStyle(color: AppColors.textDim, fontSize: 13)),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        const Spacer(),
+        const SizedBox(height: 16),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '${_number.format(current)} / ${_number.format(goal.targetScore)}',
+            style: AppText.mono(size: 12),
+          ),
+        ),
+        const SizedBox(height: 6),
+        ProgressBar(value: goal.progress(current)),
+        const SizedBox(height: 6),
+        Text(
+          summary?.season?.goalPace(remaining, game.unit) ??
+          switch ((pace, days)) {
+            (final p?, final d?) => '~$p ${game.unit}/day · $d ${d == 1 ? 'day' : 'days'}',
+            (final p?, _) when p <= 0 => 'Pace: ${signed(p)} ${game.unit}/day',
+            _ => '${(goal.progress(current) * 100).round()}% of the way',
+          },
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.textDim, fontSize: 12.5),
+        ),
+      ],
+    );
+  }
+}
+
+/// Rank art from the API, or a ring in the rank's colour with its initial.
+class RankBadge extends StatelessWidget {
+  const RankBadge({super.key, required this.name, required this.imageUrl, this.size = 44});
+
+  final String name;
+  final String? imageUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = rankColor(name);
+    final fallback = Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AppColors.background,
-        border: Border.all(color: color.withValues(alpha: 0.8), width: 2.5),
+        border: Border.all(color: color.withValues(alpha: 0.8), width: 2),
       ),
-      padding: const EdgeInsets.all(8),
+      alignment: Alignment.center,
+      child: Text(
+        name.isEmpty ? '?' : name[0].toUpperCase(),
+        style: AppText.display(size * 0.5, color: color),
+      ),
+    );
+    return SizedBox.square(
+      dimension: size,
       child: imageUrl == null
           ? fallback
-          : Image.network(imageUrl!, errorBuilder: (_, _, _) => fallback),
+          : Image.network(imageUrl!, fit: BoxFit.contain, errorBuilder: (_, _, _) => fallback),
     );
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status, required this.live});
+class _Status extends StatelessWidget {
+  const _Status({required this.status});
 
   final PlayerStatus? status;
-  final bool live;
 
   @override
   Widget build(BuildContext context) {
-    final text = switch (status) {
-      PlayerStatus(inGame: true, :final legend) => legend == null ? 'In match' : 'In match · $legend',
-      PlayerStatus(online: true, :final text) => text ?? 'Online',
-      _ => 'Live tracking',
+    final (text, live) = switch (status) {
+      PlayerStatus(inGame: true, :final legend) => (legend == null ? 'In match' : 'In match · $legend', true),
+      PlayerStatus(online: true, :final text) => (text ?? 'Online', true),
+      _ => ('Tracking', false),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(99)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          LiveDot(color: live ? AppColors.live : AppColors.textDim, size: 7),
-          const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-        ],
-      ),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag(this.icon, this.text);
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(99)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: AppColors.textDim),
-          const SizedBox(width: 5),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDim)),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        LiveDot(color: live ? AppColors.live : AppColors.textFaint, size: 7),
+        const SizedBox(width: 7),
+        Text(text.toUpperCase(), style: AppText.label(color: live ? AppColors.live : AppColors.textFaint, size: 10)),
+      ],
     );
   }
 }

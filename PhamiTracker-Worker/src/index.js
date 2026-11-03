@@ -5,12 +5,14 @@
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   DELETE /v1/players/:id             stop tracking
 //   GET    /v1/apex/maps               Apex map rotation
+//   GET    /v1/apex/season             Current season + ranked split dates
 //
 // Every request needs `X-App-Key: <APP_KEY>`.
 
 import { ApiError, APEX_PLATFORMS, fetchApexPlayer } from "./apex.js";
 import { VALORANT_PLATFORMS, VALORANT_REGIONS, fetchValorantPlayer, valorantTierIcon } from "./valorant.js";
 import { getApexMaps, pollDue, pollPlayer, rankLabel } from "./poller.js";
+import { getApexSeason } from "./seasons.js";
 import { summarize } from "./stats.js";
 
 const DAY = 86_400_000;
@@ -49,6 +51,9 @@ async function route(request, env, ctx) {
   if (env.APP_KEY && request.headers.get("x-app-key") !== env.APP_KEY) return fail(401, "Bad app key");
 
   if (parts[0] !== "v1") return fail(404, "Not found");
+  if (parts[1] === "apex" && parts[2] === "season" && request.method === "GET") {
+    return json(await getApexSeason(env));
+  }
   if (parts[1] === "apex" && parts[2] === "maps" && request.method === "GET") {
     return json(await getApexMaps(env));
   }
@@ -99,6 +104,7 @@ async function route(request, env, ctx) {
   ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
 
   const state = fresh.state ? JSON.parse(fresh.state) : null;
+  const season = fresh.game === "apex" ? await getApexSeason(env, now) : null;
   const stats = summarize(rows, fresh.score, { tzOffset, days, now });
   const base = {
     player: publicPlayer(fresh, state),
@@ -113,6 +119,7 @@ async function route(request, env, ctx) {
     polledAt: fresh.last_polled_at,
     lastChangeAt: fresh.last_change_at,
     error: fresh.error,
+    season,
     serverTime: now,
   };
   const matches = (limit) =>

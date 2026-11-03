@@ -24,6 +24,7 @@ test("summarize totals today and rebuilds daily history from the current score",
     { delta, count, wins, losses, best, worst, startScore },
     { delta: 80, count: 2, wins: 1, losses: 1, best: 120, worst: -40, startScore: 10_040 },
   );
+  assert.deepEqual(today.series, [-40, 80]);
   assert.deepEqual(history.map((d) => d.day), ["2026-10-31", "2026-11-01", "2026-11-02"]);
   assert.deepEqual(history.map((d) => d.score), [14_840, 10_040, 10_120]);
   // Adjustments move the score line but don't count as RP earned.
