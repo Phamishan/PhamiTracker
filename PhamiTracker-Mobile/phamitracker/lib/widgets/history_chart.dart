@@ -18,7 +18,7 @@ class HistoryChart extends StatelessWidget {
     required this.game,
     required this.history,
     required this.range,
-    required this.onRange,
+    this.onRange,
     this.goal,
   });
 
@@ -27,7 +27,8 @@ class HistoryChart extends StatelessWidget {
   /// Null while the range is loading.
   final List<DayPoint>? history;
   final ClimbRange range;
-  final ValueChanged<ClimbRange> onRange;
+  /// Null hides the range toggle (search results only have the last 14 days).
+  final ValueChanged<ClimbRange>? onRange;
   final RankGoal? goal;
 
   @override
@@ -43,7 +44,12 @@ class HistoryChart extends StatelessWidget {
             padding: const EdgeInsets.only(left: 6, bottom: 14),
             child: Row(
               children: [
-                Expanded(child: _RangeToggle(range: range, onChanged: onRange)),
+                Expanded(
+                  child: switch (onRange) {
+                    null => Text('LAST 14 DAYS', style: AppText.label()),
+                    final onRange => _RangeToggle(range: range, onChanged: onRange),
+                  },
+                ),
                 const SizedBox(width: 10),
                 if (history != null) DeltaChip(total, unit: game.unit),
               ],

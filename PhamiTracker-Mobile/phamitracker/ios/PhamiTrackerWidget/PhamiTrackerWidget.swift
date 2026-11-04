@@ -28,9 +28,20 @@ private let goalSoft = Color(hex: 0xE9C77E)
 private let gain = Color(hex: 0x5BC98D)
 private let loss = Color(hex: 0xEF5B5B)
 
+/// "18:30" in Danish time (Europe/Copenhagen, 24-hour), whatever the phone's own zone is.
+private let danishClockFormat: DateFormatter = {
+  let formatter = DateFormatter()
+  formatter.locale = Locale(identifier: "da_DK")
+  formatter.timeZone = TimeZone(identifier: "Europe/Copenhagen")
+  formatter.dateFormat = "HH:mm"
+  return formatter
+}()
+
+private func danishClock(_ date: Date) -> String { danishClockFormat.string(from: date) }
+
 /// "Today 13:48", "Yesterday 21:02", "Sun 1 Nov".
 private func matchDate(_ date: Date) -> String {
-  let time = date.formatted(date: .omitted, time: .shortened)
+  let time = danishClock(date)
   if Calendar.current.isDateInToday(date) { return "Today \(time)" }
   if Calendar.current.isDateInYesterday(date) { return "Yesterday \(time)" }
   return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
@@ -1164,7 +1175,7 @@ struct MapRotationView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
           countdown.font(grotesk(family == .systemSmall ? 16 : 20, .medium).monospacedDigit())
           if let end = entry.end, family == .systemMedium {
-            Text("Ends \(end.formatted(date: .omitted, time: .shortened))")
+            Text("Ends \(danishClock(end))")
               .font(grotesk(10).monospacedDigit())
               .foregroundStyle(textDim)
           }

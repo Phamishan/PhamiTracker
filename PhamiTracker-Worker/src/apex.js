@@ -1,6 +1,6 @@
-// apexlegendsapi.com (api.mozambiquehe.re) client + normalizers.
+// apexlegendsapi.com (api.apexlegendsstatus.com) client + normalizers.
 
-const BASE = "https://api.mozambiquehe.re";
+const BASE = "https://api.apexlegendsstatus.com";
 
 export const APEX_PLATFORMS = ["PC", "PS4", "X1", "SWITCH"];
 

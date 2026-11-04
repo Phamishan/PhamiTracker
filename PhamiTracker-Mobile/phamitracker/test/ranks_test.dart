@@ -5,13 +5,20 @@ import 'package:phamitracker/models/ranks.dart';
 import 'package:phamitracker/models/summary.dart';
 
 void main() {
-  test('apex ladder', () {
+  test('apex ladder (Season 31)', () {
     expect(apexLadder.first.label, 'Rookie IV');
-    expect(apexLadder.last.label, 'Master');
-    expect(rankAt(Game.apex, 11400).label, 'Diamond IV');
-    expect(rankAt(Game.apex, 11399).label, 'Platinum I');
-    expect(nextRank(Game.apex, 11400)?.label, 'Diamond III');
+    expect(apexLadder.last, isA<RankStep>().having((r) => r.label, 'label', 'Master').having((r) => r.minScore, 'minScore', 16000));
+    expect(rankAt(Game.apex, 12000).label, 'Diamond IV');
+    expect(rankAt(Game.apex, 11999).label, 'Platinum I');
+    // Wingman showed a Diamond III player at 13,460 / 16,000 RP to Master.
+    expect(rankAt(Game.apex, 13460).label, 'Diamond III');
+    expect(rankAt(Game.apex, 4750).label, 'Silver I');
+    expect(nextRank(Game.apex, 12000)?.label, 'Diamond III');
     expect(nextRank(Game.apex, 20000), isNull);
+    // Floors only ever go up.
+    for (var i = 1; i < apexLadder.length; i++) {
+      expect(apexLadder[i].minScore, greaterThan(apexLadder[i - 1].minScore));
+    }
   });
 
   test('valorant ladder matches elo = (tier - 3) * 100', () {
@@ -28,7 +35,7 @@ void main() {
   });
 
   test('goal progress counts from where the goal was set', () {
-    const goal = RankGoal(label: 'Diamond IV', targetScore: 11400, startScore: 10400);
+    const goal = RankGoal(label: 'Diamond IV', targetScore: 11400, startScore: 10400); // any numbers
     expect(goal.progress(10400), 0);
     expect(goal.progress(10900), 0.5);
     expect(goal.progress(12000), 1);
@@ -47,9 +54,9 @@ void main() {
   });
 
   test('goal rank icons', () {
-    expect(goalIconUrl(Game.apex, 11400), 'https://api.mozambiquehe.re/assets/ranks/diamond4.png');
-    expect(goalIconUrl(Game.apex, 15000), 'https://api.mozambiquehe.re/assets/ranks/master.png');
-    expect(goalIconUrl(Game.apex, 12000), endsWith('/diamond4.png')); // custom RP goal
+    expect(goalIconUrl(Game.apex, 12000), 'https://api.mozambiquehe.re/assets/ranks/diamond4.png');
+    expect(goalIconUrl(Game.apex, 16000), 'https://api.mozambiquehe.re/assets/ranks/master.png');
+    expect(goalIconUrl(Game.apex, 12500), endsWith('/diamond4.png')); // custom RP goal
     expect(goalIconUrl(Game.valorant, 1800), endsWith('/21/largeicon.png')); // Ascendant 1
     expect(goalIconUrl(Game.valorant, 2400), endsWith('/27/largeicon.png')); // Radiant
   });

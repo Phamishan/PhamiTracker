@@ -21,6 +21,7 @@ class PlayerSummary {
     this.level,
     this.error,
     this.season,
+    this.tracked = true,
   });
 
   final Game game;
@@ -40,6 +41,9 @@ class PlayerSummary {
 
   /// Apex only: current season and ranked split dates.
   final SeasonInfo? season;
+
+  /// Search results: whether anyone tracks this account (so its matches were recorded).
+  final bool tracked;
 
   /// Average points per day over the charted history ("~116 RP/day"), or null without enough data.
   int? get pacePerDay {
@@ -74,6 +78,7 @@ class PlayerSummary {
       level: _int(json['level']),
       error: json['error'] as String?,
       season: SeasonInfo.tryParse(json['season']),
+      tracked: json['tracked'] != false,
     );
   }
 }

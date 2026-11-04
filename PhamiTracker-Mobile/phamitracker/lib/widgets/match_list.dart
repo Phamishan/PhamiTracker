@@ -10,21 +10,22 @@ import 'common.dart';
 
 /// Every rank change the worker picked up, newest first. Shows five, scrolls for the rest.
 class MatchList extends StatelessWidget {
-  const MatchList({super.key, required this.game, required this.matches});
+  const MatchList({super.key, required this.game, required this.matches, this.emptyText});
 
   static const visibleRows = 5;
   static const rowHeight = 64.0;
 
   final Game game;
   final List<MatchEntry> matches;
+  final String? emptyText;
 
   @override
   Widget build(BuildContext context) {
     if (matches.isEmpty) {
-      return const TrackerCard(
+      return TrackerCard(
         child: Text(
-          "No ranked games yet. They show up here a minute after each match, even with the app closed.",
-          style: TextStyle(color: AppColors.textDim, height: 1.4),
+          emptyText ?? "No ranked games yet. They show up here a minute after each match, even with the app closed.",
+          style: const TextStyle(color: AppColors.textDim, height: 1.4),
         ),
       );
     }
@@ -112,6 +113,22 @@ String matchDate(DateTime time, {DateTime? now}) {
   if (day == today.subtract(const Duration(days: 1))) return 'Yesterday, $clock';
   final date = day.year == today.year ? DateFormat('EEE d MMM') : DateFormat('d MMM yyyy');
   return '${date.format(time)}, $clock';
+}
+
+/// "18:30" in Danish time (Europe/Copenhagen, 24-hour), whatever the phone's own zone is.
+String danishClock(DateTime time) => DateFormat('HH:mm').format(copenhagenTime(time));
+
+/// [time] as a wall-clock in Copenhagen: CET (UTC+1), or CEST (UTC+2) from the last Sunday of
+/// March to the last Sunday of October, switching at 01:00 UTC (the EU rule).
+DateTime copenhagenTime(DateTime time) {
+  final utc = time.toUtc();
+  DateTime lastSunday(int month) {
+    final lastDay = DateTime.utc(utc.year, month + 1, 0);
+    return DateTime.utc(utc.year, month, lastDay.day - lastDay.weekday % 7, 1);
+  }
+
+  final summer = !utc.isBefore(lastSunday(3)) && utc.isBefore(lastSunday(10));
+  return utc.add(Duration(hours: summer ? 2 : 1));
 }
 
 /// RP/RR won or lost per map, the "which map am I bad at" view.
@@ -285,7 +302,7 @@ class _RotationTile extends StatelessWidget {
                     Text(_countdown(remaining), style: AppText.mono(color: Colors.white, size: large ? 20 : 15)),
                     const SizedBox(width: 10),
                     Text(
-                      'ENDS ${DateFormat.jm().format(current.end!).toUpperCase()}',
+                      'ENDS ${danishClock(current.end!)}',
                       style: AppText.mono(color: Colors.white70, size: 12),
                     ),
                   ],

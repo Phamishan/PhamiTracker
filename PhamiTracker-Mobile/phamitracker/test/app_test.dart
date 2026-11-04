@@ -61,6 +61,22 @@ http.Client fakeWorker({List<String>? log}) => MockClient((request) async {
           201,
         );
       }
+      if (path == '/v1/search') {
+        if (request.url.queryParameters['name'] != 'Rival') return http.Response('{"error":"Player not found"}', 404);
+        return http.Response(
+          jsonEncode({
+            ...apexSummary(),
+            'player': {'id': null, 'game': 'apex', 'name': 'Rival', 'platform': 'PC'},
+            'rankLabel': 'Diamond III',
+            'score': 13460,
+            'matches': [],
+            'history': [],
+            'maps': [],
+            'tracked': false,
+          }),
+          200,
+        );
+      }
       if (path == '/v1/players/apex-1') return http.Response(jsonEncode(apexSummary()), 200);
       return http.Response('{"error":"Unknown player"}', 404);
     });
@@ -134,6 +150,48 @@ void main() {
     expect(matchDate(DateTime(2026, 11, 2, 21, 2), now: now), 'Yesterday, 21:02');
     expect(matchDate(DateTime(2026, 11, 1, 18, 30), now: now), 'Sun 1 Nov, 18:30');
     expect(matchDate(DateTime(2025, 12, 24, 9, 5), now: now), '24 Dec 2025, 09:05');
+  });
+
+  test('rotation end times are Danish 24-hour time', () {
+    expect(danishClock(DateTime.utc(2026, 11, 4, 17, 30)), '18:30'); // CET, UTC+1
+    expect(danishClock(DateTime.utc(2026, 7, 1, 21, 5)), '23:05'); // CEST, UTC+2
+    // 2026 switches on 29 March and 25 October at 01:00 UTC.
+    expect(danishClock(DateTime.utc(2026, 3, 29, 0, 59)), '01:59');
+    expect(danishClock(DateTime.utc(2026, 3, 29, 1)), '03:00');
+    expect(danishClock(DateTime.utc(2026, 10, 25, 0, 59)), '02:59');
+    expect(danishClock(DateTime.utc(2026, 10, 25, 1)), '02:00');
+  });
+
+  testWidgets('searching a player opens their page without tracking them', (tester) async {
+    final log = <String>[];
+    final state = await makeState(prefs: {'game': 'apex'}, log: log);
+    await tester.pumpWidget(PhamiTrackerApp(state: state));
+    await tester.pump();
+    // The rotation countdown ticks forever, so pump for fixed times instead of settling.
+    Future<void> settle() async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    await tester.tap(find.byTooltip('Search player'));
+    await settle();
+    await tester.enterText(find.byType(TextField).first, 'Nobody');
+    await tester.tap(find.text('SEARCH'));
+    await settle();
+    expect(find.textContaining("Couldn't find that player"), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'Rival');
+    await tester.tap(find.text('SEARCH'));
+    await settle();
+    expect(find.text('DIAMOND III'), findsOneWidget);
+    expect(find.text('13,460 RP'), findsOneWidget);
+    await tester.scrollUntilVisible(find.textContaining("Apex doesn't share match history"), 200);
+    expect(find.textContaining("Apex doesn't share match history"), findsOneWidget);
+    expect(log.where((l) => l.startsWith('POST')), isEmpty);
+    expect(state.accounts, isEmpty);
+
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('match list shows five rows and scrolls to the rest', (tester) async {

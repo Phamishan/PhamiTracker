@@ -125,10 +125,10 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
             ],
           ),
           const SectionTitle('Platform'),
-          _Choices(options: platforms, selected: _platform, game: game, onSelected: (v) => setState(() => _platform = v)),
+          OptionChips(options: platforms, selected: _platform, game: game, onSelected: (v) => setState(() => _platform = v)),
           if (game == Game.valorant) ...[
             const SectionTitle('Region'),
-            _Choices(options: valorantRegions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
+            OptionChips(options: valorantRegions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
           ],
           if (_error != null) ...[
             const SizedBox(height: 18),
@@ -150,8 +150,9 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
   }
 }
 
-class _Choices extends StatelessWidget {
-  const _Choices({required this.options, required this.selected, required this.game, required this.onSelected});
+/// A row of choice chips (platform, region), tinted with the game colour.
+class OptionChips extends StatelessWidget {
+  const OptionChips({super.key, required this.options, required this.selected, required this.game, required this.onSelected});
 
   final Map<String, String> options;
   final String selected;

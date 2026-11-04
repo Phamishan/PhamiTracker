@@ -106,6 +106,25 @@ class TrackerApi {
     return [for (final d in (json['history'] as List? ?? const [])) DayPoint.fromJson(d as Map<String, dynamic>)];
   }
 
+  /// Anyone's player page, looked up live without tracking them.
+  Future<PlayerSummary> search({
+    required Game game,
+    required String name,
+    String? tag,
+    required String platform,
+    String? region,
+  }) async {
+    final json = await _send('GET', '/v1/search', query: {
+      'game': game.id,
+      'name': name,
+      'tag': ?tag,
+      'platform': platform,
+      'region': ?region,
+      'tzOffset': '$_tzOffset',
+    });
+    return PlayerSummary.fromJson(json);
+  }
+
   Future<void> unlink(String playerId) => _send('DELETE', '/v1/players/$playerId');
 
   Future<MapRotation> apexMaps() async => MapRotation.fromJson(await _send('GET', '/v1/apex/maps'));

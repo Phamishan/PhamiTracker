@@ -1,17 +1,27 @@
 // PhamiTracker API + poller.
 //
-//   POST   /v1/players                 link an account  {game, name, tag?, platform, region?}
+//   POST   /v1/players                 link an account  {game, name, tag?, platform, region?, uid?}
+//                                      (Apex: `uid` instead of `name` links that exact account)
 //   GET    /v1/players/:id             dashboard summary  ?tzOffset=<min east of UTC>&days=&refresh=1
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   DELETE /v1/players/:id             stop tracking
 //   GET    /v1/apex/maps               Apex map rotation
 //   GET    /v1/apex/season             Current season + ranked split dates
+//   GET    /v1/search                  look anyone up without tracking them
+//                                      ?game=&name=&tag=&platform=&region=&tzOffset=
 //
 // Every request needs `X-App-Key: <APP_KEY>`.
 
 import { ApiError, APEX_PLATFORMS, fetchApexPlayer } from "./apex.js";
-import { VALORANT_PLATFORMS, VALORANT_REGIONS, fetchValorantPlayer, valorantTierIcon } from "./valorant.js";
+import {
+  VALORANT_PLATFORMS,
+  VALORANT_REGIONS,
+  fetchValorantHistory,
+  fetchValorantMatchDetails,
+  fetchValorantPlayer,
+  valorantTierIcon,
+} from "./valorant.js";
 import { getApexMaps, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { getApexSeason } from "./seasons.js";
 import { summarize } from "./stats.js";
@@ -41,6 +51,9 @@ export default {
 
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(pollDue(env, controller.scheduledTime).then((counts) => console.log("polled", counts)));
+    ctx.waitUntil(
+      env.DB.prepare("DELETE FROM cache WHERE key LIKE 'search:%' AND expires_at < ?").bind(controller.scheduledTime).run(),
+    );
   },
 };
 
@@ -58,6 +71,7 @@ async function route(request, env, ctx) {
   if (parts[1] === "apex" && parts[2] === "maps" && request.method === "GET") {
     return json(await getApexMaps(env));
   }
+  if (parts[1] === "search" && parts.length === 2 && request.method === "GET") return search(env, url);
   if (parts[1] !== "players") return fail(404, "Not found");
 
   if (parts.length === 2 && request.method === "POST") return createPlayer(request, env);
@@ -169,15 +183,17 @@ async function createPlayer(request, env) {
   if (!body) return fail(400, "Expected JSON body");
   const game = body.game;
   const name = String(body.name ?? "").trim();
-  if (!name) return fail(400, "name is required");
+  // Apex names aren't unique, so a uid is the only way to be sure which account gets linked.
+  const uid = game === "apex" ? String(body.uid ?? "").trim() : "";
+  if (!name && !uid) return fail(400, "name is required");
 
   let key;
   let snapshot;
   if (game === "apex") {
     const platform = String(body.platform ?? "PC").toUpperCase();
     if (!APEX_PLATFORMS.includes(platform)) return fail(400, `platform must be one of ${APEX_PLATFORMS}`);
-    snapshot = await fetchApexPlayer(env, { name, platform });
-    key = { game, platform, region: "", name, tag: "" };
+    snapshot = await fetchApexPlayer(env, { name, platform, uid: uid || undefined });
+    key = { game, platform, region: "", name: uid ? snapshot.name ?? uid : name, tag: "" };
   } else if (game === "valorant") {
     const tag = String(body.tag ?? "").trim().replace(/^#/, "");
     const region = String(body.region ?? "eu").toLowerCase();
@@ -193,11 +209,22 @@ async function createPlayer(request, env) {
 
   const now = Date.now();
   const lower = { ...key, name: key.name.toLowerCase(), tag: key.tag.toLowerCase() };
-  let player = await env.DB.prepare(
-    "SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?",
-  )
-    .bind(lower.game, lower.platform, lower.region, lower.name, lower.tag)
-    .first();
+  let player = uid
+    ? await env.DB.prepare("SELECT * FROM players WHERE game = ? AND platform = ? AND external_id = ?")
+        .bind(lower.game, lower.platform, snapshot.externalId)
+        .first()
+    : null;
+  if (!player) {
+    player = await env.DB.prepare(
+      "SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?",
+    )
+      .bind(lower.game, lower.platform, lower.region, lower.name, lower.tag)
+      .first();
+    // Same name, different account: don't hand back someone else's history.
+    if (player && uid && player.external_id && player.external_id !== snapshot.externalId) {
+      return fail(409, `"${key.name}" is already linked to a different account`);
+    }
+  }
 
   if (!player) {
     const id = crypto.randomUUID();
@@ -213,6 +240,117 @@ async function createPlayer(request, env) {
   player = await pollPlayer(env, player).catch(() => player);
   const state = player.state ? JSON.parse(player.state) : null;
   return json({ player: publicPlayer(player, state), rankLabel: rankLabel(player.game, state), score: player.score }, 201);
+}
+
+// Searches hit the game APIs directly, so repeat lookups of the same player are cached briefly.
+const SEARCH_CACHE_MS = 60_000;
+
+/**
+ * A player page for anyone, without linking them. Shaped like the summary so the app can reuse
+ * its dashboard. If someone already tracks this account, their recorded matches fill it in;
+ * otherwise Apex shows the live rank only, and VALORANT builds it from HenrikDev's recent games.
+ */
+async function search(env, url) {
+  const q = (key) => String(url.searchParams.get(key) ?? "").trim();
+  const game = q("game");
+  const name = q("name");
+  const tzOffset = clamp(Number(url.searchParams.get("tzOffset")) || 0, -14 * 60, 14 * 60);
+  if (!name) return fail(400, "name is required");
+
+  let account;
+  if (game === "apex") {
+    const platform = (q("platform") || "PC").toUpperCase();
+    if (!APEX_PLATFORMS.includes(platform)) return fail(400, `platform must be one of ${APEX_PLATFORMS}`);
+    account = { game, platform, region: "", name, tag: "" };
+  } else if (game === "valorant") {
+    const tag = q("tag").replace(/^#/, "");
+    const region = (q("region") || "eu").toLowerCase();
+    const platform = (q("platform") || "pc").toLowerCase();
+    if (!tag) return fail(400, "tag is required");
+    if (!VALORANT_REGIONS.includes(region)) return fail(400, `region must be one of ${VALORANT_REGIONS}`);
+    if (!VALORANT_PLATFORMS.includes(platform)) return fail(400, `platform must be one of ${VALORANT_PLATFORMS}`);
+    account = { game, platform, region, name, tag };
+  } else {
+    return fail(400, "game must be apex or valorant");
+  }
+
+  const now = Date.now();
+  const cacheKey = `search:${[game, account.platform, account.region, name, account.tag].join(":").toLowerCase()}:${tzOffset}`;
+  const cached = await env.DB.prepare("SELECT value, expires_at FROM cache WHERE key = ?").bind(cacheKey).first();
+  if (cached && cached.expires_at > now) return json({ ...JSON.parse(cached.value), serverTime: now });
+
+  const state = game === "apex"
+    ? await fetchApexPlayer(env, account)
+    : await fetchValorantPlayer(env, account);
+
+  // Someone tracks this account already: use what the poller has recorded.
+  const tracked = state.externalId
+    ? await env.DB.prepare("SELECT id FROM players WHERE game = ? AND external_id = ? ORDER BY created_at LIMIT 1")
+        .bind(game, state.externalId)
+        .first()
+    : null;
+  let rows = tracked
+    ? (
+        await env.DB.prepare(
+          "SELECT ts, delta, score_after, kind, detail FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT 100",
+        )
+          .bind(tracked.id)
+          .all()
+      ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }))
+    : [];
+
+  if (!tracked && game === "valorant") {
+    const full = { ...account, name: state.name ?? name, tag: state.tag ?? account.tag };
+    const [history, details] = await Promise.all([
+      fetchValorantHistory(env, full).catch(() => []),
+      fetchValorantMatchDetails(env, { ...full, puuid: state.externalId }).catch(() => ({})),
+    ]);
+    rows = history
+      .filter((entry) => Number.isFinite(entry.ts))
+      .map((entry) => ({
+        ts: entry.ts,
+        delta: entry.delta,
+        score_after: Number.isFinite(entry.eloAfter) ? entry.eloAfter : state.score,
+        kind: "match",
+        detail: { map: entry.map, rank: entry.tier, ...(details[entry.matchId] ?? {}) },
+      }));
+  }
+
+  const stats = summarize(rows, state.score, { tzOffset, days: 14, now });
+  const body = {
+    player: {
+      id: null,
+      game,
+      name: state.name ?? name,
+      tag: game === "valorant" ? state.tag ?? account.tag : null,
+      platform: account.platform,
+      region: account.region || null,
+    },
+    score: state.score,
+    rank: state.rank,
+    rankLabel: rankLabel(game, state),
+    status: state.status ?? null,
+    today: stats.today,
+    // Without any recorded games the "climb" is just a flat line, so leave it out.
+    history: rows.length ? stats.history : [],
+    maps: stats.maps,
+    matches: rows.map((row) => ({
+      ts: row.ts,
+      delta: row.delta,
+      scoreAfter: row.score_after,
+      kind: row.kind,
+      ...row.detail,
+    })),
+    level: state.level ?? null,
+    banner: state.banner ?? null,
+    season: game === "apex" ? await getApexSeason(env, now).catch(() => null) : null,
+    tracked: Boolean(tracked),
+    polledAt: now,
+  };
+  await env.DB.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)")
+    .bind(cacheKey, JSON.stringify(body), now + SEARCH_CACHE_MS)
+    .run();
+  return json({ ...body, serverTime: now });
 }
 
 function publicPlayer(row, state) {

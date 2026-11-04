@@ -13,6 +13,7 @@ import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
 import 'goal_sheet.dart';
 import 'link_account_page.dart';
+import 'search_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -73,7 +74,7 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.fromLTRB(18, 8, 18, 40),
                     sliver: SliverList.list(
                       children: [
-                        _Header(name: (state.account ?? state.accounts.values.firstOrNull)?.name),
+                        _Header(name: (state.account ?? state.accounts.values.firstOrNull)?.name, game: game),
                         const SizedBox(height: 18),
                         GameSwitcher(
                           selected: game,
@@ -160,11 +161,12 @@ class _Dashboard extends StatelessWidget {
   }
 }
 
-/// "Welcome back, Phami" with a round settings button, like PhamiJam's home header.
+/// "Welcome back, Phami" with round search and settings buttons, like PhamiJam's home header.
 class _Header extends StatelessWidget {
-  const _Header({required this.name});
+  const _Header({required this.name, required this.game});
 
   final String? name;
+  final Game game;
 
   @override
   Widget build(BuildContext context) {
@@ -179,16 +181,42 @@ class _Header extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Material(
-          color: AppColors.surfaceHigh,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-            child: const SizedBox.square(dimension: 48, child: Icon(Icons.settings_rounded, color: AppColors.text)),
-          ),
+        _RoundButton(
+          icon: Icons.search_rounded,
+          tooltip: 'Search player',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SearchPage(initialGame: game))),
+        ),
+        const SizedBox(width: 8),
+        _RoundButton(
+          icon: Icons.settings_rounded,
+          tooltip: 'Settings',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
         ),
       ],
+    );
+  }
+}
+
+class _RoundButton extends StatelessWidget {
+  const _RoundButton({required this.icon, required this.tooltip, required this.onTap});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: AppColors.surfaceHigh,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox.square(dimension: 48, child: Icon(icon, color: AppColors.text)),
+        ),
+      ),
     );
   }
 }

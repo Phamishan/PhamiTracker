@@ -13,6 +13,7 @@
 📜 - Match history (legend/agent, map, K/D/A)
 🗺️ - RP/RR per map
 🔄 - Apex map rotation with countdown
+🔍 - Search any player
 📱 - Home screen & lock screen widgets (RP Today, Rank Goal, Climb, Map Rotation)
 🆓 - Free
 ⛔ - No ads
@@ -69,4 +70,10 @@
   - Added About PhamiTracker with version history
   - Removed the cloud tracker section from settings
   - Made the widget icons in settings grey
+  - Updated readme
+- 1.0.5 - 04/11/2026
+  - Added player search (look up any Apex or VALORANT player without tracking them)
+  - Changed map rotation end times to Danish time (24-hour)
+  - Changed widget match times to 24-hour
+  - Updated Apex rank goals to the Season 31 RP table (Master at 16,000 RP)
   - Updated readme

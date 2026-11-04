@@ -13,21 +13,35 @@ class RankStep {
   String get tier => label.split(' ').first;
 }
 
-const _apexDivisions = ['IV', 'III', 'II', 'I'];
-
-/// Apex ranked thresholds (Season 17+ ladder). Predator is top-750, so it isn't an RP goal.
-/// If Respawn reshuffles the ladder, this list is the only thing to update.
-final List<RankStep> apexLadder = [
-  for (final (tier, start, step) in const [
-    ('Rookie', 0, 250),
-    ('Bronze', 1000, 500),
-    ('Silver', 3000, 600),
-    ('Gold', 5400, 700),
-    ('Platinum', 8200, 800),
-    ('Diamond', 11400, 900),
-  ])
-    for (var i = 0; i < 4; i++) RankStep('$tier ${_apexDivisions[i]}', start + step * i),
-  const RankStep('Master', 15000),
+/// Apex ranked floors, Season 31 (Master at 16,000 RP; matches what other trackers show).
+/// Predator is the top 750 per platform, not an RP number, so it isn't a goal step.
+/// Respawn changes these between seasons; this list is the only thing to update.
+const List<RankStep> apexLadder = [
+  RankStep('Rookie IV', 0),
+  RankStep('Rookie III', 250),
+  RankStep('Rookie II', 500),
+  RankStep('Rookie I', 750),
+  RankStep('Bronze IV', 1000),
+  RankStep('Bronze III', 1500),
+  RankStep('Bronze II', 2000),
+  RankStep('Bronze I', 2500),
+  RankStep('Silver IV', 3000),
+  RankStep('Silver III', 3500),
+  RankStep('Silver II', 4000),
+  RankStep('Silver I', 4750),
+  RankStep('Gold IV', 5500),
+  RankStep('Gold III', 6250),
+  RankStep('Gold II', 7000),
+  RankStep('Gold I', 7750),
+  RankStep('Platinum IV', 8500),
+  RankStep('Platinum III', 9250),
+  RankStep('Platinum II', 10000),
+  RankStep('Platinum I', 11000),
+  RankStep('Diamond IV', 12000),
+  RankStep('Diamond III', 13000),
+  RankStep('Diamond II', 14000),
+  RankStep('Diamond I', 15000),
+  RankStep('Master', 16000),
 ];
 
 /// VALORANT: 100 RR per division, so elo = (tier - 3) * 100 + RR. Iron 1 is tier 3.
