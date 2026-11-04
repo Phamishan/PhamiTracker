@@ -16,16 +16,17 @@ let appGroup = "group.phamishan.phamitracker"
 
 // MARK: - Style (matches lib/theme/app_theme.dart)
 
-private let cardTop = Color(hex: 0x1F1F22)
-private let cardBottom = Color(hex: 0x121214)
-private let track = Color(hex: 0x26262A)
-private let textDim = Color(hex: 0x8E8E96)
-private let textFaint = Color(hex: 0x5E5E66)
-private let accent = Color(hex: 0xE5533D)
-private let goalColor = Color(hex: 0xCF4DF0)
-private let goalSoft = Color(hex: 0xB98CF5)
-private let gain = Color(hex: 0x4CC38A)
-private let loss = Color(hex: 0xF25555)
+// PhamiJam's family look: warm charcoal, coral accent, PhamiJam gold for goals.
+private let cardTop = Color(hex: 0x2A2724)
+private let cardBottom = Color(hex: 0x24221F)
+private let track = Color(hex: 0x35312C)
+private let textDim = Color(hex: 0xCBBFA8)
+private let textFaint = Color(hex: 0x8C8273)
+private let accent = Color(hex: 0xE0604E)
+private let goalColor = Color(hex: 0xDBA43A)
+private let goalSoft = Color(hex: 0xE9C77E)
+private let gain = Color(hex: 0x5BC98D)
+private let loss = Color(hex: 0xEF5B5B)
 
 /// "Today 13:48", "Yesterday 21:02", "Sun 1 Nov".
 private func matchDate(_ date: Date) -> String {
@@ -90,7 +91,7 @@ enum TrackedGame: String, AppEnum {
   var unit: String { self == .apex ? "RP" : "RR" }
   /// Bundled logo (Logos/logo-<game>@3x.png, rendered from lib/models/game.dart).
   var logo: UIImage? { UIImage(named: "logo-\(rawValue)") }
-  var accent: Color { self == .apex ? Color(hex: 0xE5533D) : Color(hex: 0xFF4655) }
+  var accent: Color { self == .apex ? Color(hex: 0xE0604E) : Color(hex: 0xFF4655) }
 }
 
 struct GameIntent: WidgetConfigurationIntent {

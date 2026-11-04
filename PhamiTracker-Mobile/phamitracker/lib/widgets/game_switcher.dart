@@ -20,8 +20,7 @@ class GameSwitcher extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
@@ -37,7 +36,6 @@ class GameSwitcher extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: game == selected ? AppColors.surfaceHigh : Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: game == selected ? AppColors.border : Colors.transparent),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

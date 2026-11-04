@@ -13,7 +13,7 @@ import 'widget_bridge.dart';
 /// App-wide state: which game is showing, linked accounts, goals and the latest summaries.
 class AppState extends ChangeNotifier {
   AppState({required this.api, required this._prefs, WidgetBridge? widgets})
-      : _widgets = widgets ?? WidgetBridge() {
+    : _widgets = widgets ?? WidgetBridge() {
     _load();
   }
 
@@ -49,7 +49,9 @@ class AppState extends ChangeNotifier {
   /// the summary; other ranges are fetched on demand.
   List<DayPoint>? climb(Game game) {
     final range = climbRange(game);
-    return range == ClimbRange.twoWeeks ? summaries[game]?.history : _climb[(game, range)];
+    return range == ClimbRange.twoWeeks
+        ? summaries[game]?.history
+        : _climb[(game, range)];
   }
 
   Future<void> setClimbRange(Game game, ClimbRange range) async {
@@ -76,10 +78,18 @@ class AppState extends ChangeNotifier {
     _game = Game.fromId(_prefs.getString('game'));
     for (final game in Game.values) {
       final account = _prefs.getString('account.${game.id}');
-      if (account != null) accounts[game] = TrackedAccount.fromJson(jsonDecode(account) as Map<String, dynamic>);
-      _climbRange[game] = ClimbRange.fromName(_prefs.getString('climb.${game.id}'));
+      if (account != null)
+        accounts[game] = TrackedAccount.fromJson(
+          jsonDecode(account) as Map<String, dynamic>,
+        );
+      _climbRange[game] = ClimbRange.fromName(
+        _prefs.getString('climb.${game.id}'),
+      );
       final goal = _prefs.getString('goal.${game.id}');
-      if (goal != null) goals[game] = RankGoal.fromJson(jsonDecode(goal) as Map<String, dynamic>);
+      if (goal != null)
+        goals[game] = RankGoal.fromJson(
+          jsonDecode(goal) as Map<String, dynamic>,
+        );
     }
   }
 
@@ -143,8 +153,20 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> link({required Game game, required String name, String? tag, required String platform, String? region}) async {
-    final account = await api.link(game: game, name: name, tag: tag, platform: platform, region: region);
+  Future<void> link({
+    required Game game,
+    required String name,
+    String? tag,
+    required String platform,
+    String? region,
+  }) async {
+    final account = await api.link(
+      game: game,
+      name: name,
+      tag: tag,
+      platform: platform,
+      region: region,
+    );
     final previous = accounts[game];
     accounts[game] = account;
     summaries.remove(game);
@@ -177,9 +199,17 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> setGoal(Game game, {required String label, required int targetScore}) async {
+  Future<void> setGoal(
+    Game game, {
+    required String label,
+    required int targetScore,
+  }) async {
     final current = summaries[game]?.score ?? 0;
-    final goal = RankGoal(label: label, targetScore: targetScore, startScore: current.clamp(0, targetScore));
+    final goal = RankGoal(
+      label: label,
+      targetScore: targetScore,
+      startScore: current.clamp(0, targetScore),
+    );
     goals[game] = goal;
     await _prefs.setString('goal.${game.id}', jsonEncode(goal.toJson()));
     notifyListeners();
@@ -194,7 +224,14 @@ class AppState extends ChangeNotifier {
   }
 
   void _syncWidgets() {
-    unawaited(_widgets.sync(config: api.config, accounts: accounts, goals: goals, summaries: summaries));
+    unawaited(
+      _widgets.sync(
+        config: api.config,
+        accounts: accounts,
+        goals: goals,
+        summaries: summaries,
+      ),
+    );
   }
 
   @override

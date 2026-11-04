@@ -1,31 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-/// Dark graphite surfaces, one coral accent, magenta for goals, green/red for results.
+/// PhamiJam's family look: warm charcoal surfaces, coral accent, PhamiJam gold for goals,
+/// green/red for results.
 class AppColors {
-  static const background = Color(0xFF0C0C0E);
-  static const cardTop = Color(0xFF1F1F22);
-  static const cardBottom = Color(0xFF141416);
-  static const surface = Color(0xFF18181B);
-  static const surfaceHigh = Color(0xFF26262A);
-  static const border = Color(0x12FFFFFF);
-  static const text = Color(0xFFF4F4F5);
-  static const textDim = Color(0xFF8E8E96);
-  static const textFaint = Color(0xFF5E5E66);
-  static const accent = Color(0xFFE5533D);
-  static const goal = Color(0xFFCF4DF0);
-  static const goalSoft = Color(0xFFB98CF5);
-  static const gain = Color(0xFF4CC38A);
-  static const loss = Color(0xFFF25555);
-  static const live = Color(0xFF4CC38A);
+  static const background = Color(0xFF1C1B1A);
+  static const surface = Color(0xFF2A2724);
+  static const surfaceHigh = Color(0xFF35312C);
+  static const surfaceLow = Color(0xFF201E1B);
+  static const border = Color(0x14FFFFFF);
+  static const text = Color(0xFFFFFFFF);
+  static const textDim = Color(0xFFCBBFA8);
+  static const textFaint = Color(0xFF8C8273);
+  static const accent = Color(0xFFE0604E);
+  static const goal = Color(0xFFDBA43A);
+  static const goalSoft = Color(0xFFE9C77E);
+  static const gain = Color(0xFF5BC98D);
+  static const loss = Color(0xFFEF5B5B);
+  static const live = Color(0xFF5BC98D);
 
   static Color delta(num value) => value > 0 ? gain : value < 0 ? loss : textDim;
-
-  static const cardGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [cardTop, cardBottom],
-  );
 }
 
 /// Space Grotesk throughout: spaced-out capitals for labels, bold capitals for headlines.

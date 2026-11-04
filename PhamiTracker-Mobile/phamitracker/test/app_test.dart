@@ -8,6 +8,7 @@ import 'package:phamitracker/main.dart';
 import 'package:phamitracker/models/game.dart';
 import 'package:phamitracker/models/summary.dart';
 import 'package:phamitracker/services/app_state.dart';
+import 'package:phamitracker/services/changelog_service.dart';
 import 'package:phamitracker/services/tracker_api.dart';
 import 'package:phamitracker/widgets/match_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -111,11 +112,12 @@ void main() {
 
     expect(find.text('PLATINUM I'), findsOneWidget);
     expect(find.text('10,900 RP'), findsOneWidget);
-    expect(find.text('SET A GOAL'), findsOneWidget);
+    expect(find.text('SET A RANK GOAL'), findsOneWidget);
+    expect(find.text('CURRENT RANK'), findsOneWidget);
+    expect(find.text('Welcome back, Phami'), findsOneWidget);
     expect(find.text('IN MATCH · WRAITH'), findsOneWidget);
-    expect(find.text('2W'), findsOneWidget);
     expect(find.text('7D'), findsOneWidget);
-    expect(find.text('MATCHES · 2'), findsOneWidget);
+    expect(find.text('Recent Matches · 2'), findsOneWidget);
 
     await tester.tap(find.text('VALORANT'));
     await tester.pump();
@@ -145,5 +147,29 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(find.text('MAP 11'), findsOneWidget);
+  });
+
+  test('changelog parses the README version history, newest first', () {
+    const readme = '''
+# PhamiTracker
+
+## Features:
+
+```
+🪂 - Apex Legends tracking
+```
+
+## Version History
+
+- 1.0.0 - 02/11/2026
+  - Initial Release
+- 1.0.1 - 03/11/2026
+  - Added a Climb widget
+  - New app icon
+''';
+    final entries = ChangelogService.parse(readme);
+    expect(entries.map((e) => e.version), ['1.0.1', '1.0.0']);
+    expect(entries.first.date, '03/11/2026');
+    expect(entries.first.changes, ['Added a Climb widget', 'New app icon']);
   });
 }

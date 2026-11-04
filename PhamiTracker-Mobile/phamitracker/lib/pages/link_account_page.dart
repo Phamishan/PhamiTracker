@@ -84,8 +84,15 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
         children: [
           Container(
             height: 120,
-            decoration: BoxDecoration(gradient: game.linearGradient, borderRadius: BorderRadius.circular(26)),
-            child: Center(child: GameLogo(game, size: 64, color: Colors.white)),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+            child: Center(
+              child: Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(color: game.glow.withValues(alpha: 0.16), shape: BoxShape.circle),
+                child: Center(child: GameLogo(game, size: 40, color: game.glow)),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           Row(

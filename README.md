@@ -59,3 +59,14 @@
   - Added game logos to the widgets
   - Fixed the today line wrapping on the rank card
   - Updated readme
+- 1.0.4 - 04/11/2026
+  - Redesigned the app and widgets with a warmer, PhamiJam-inspired look
+  - Added a "Welcome back" header
+  - Redesigned the rank card (centred rank, today, games and W/L)
+  - Moved the rank goal to its own card with a gold progress bar
+  - Redesigned Today into a session chart with best and worst game
+  - Redesigned match rows
+  - Added About PhamiTracker with version history
+  - Removed the cloud tracker section from settings
+  - Made the widget icons in settings grey
+  - Updated readme

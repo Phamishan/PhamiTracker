@@ -5,7 +5,7 @@ import '../models/summary.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
 
-/// Today's net points, W/L and best game, with a sparkline of the session.
+/// Today's session as a running total, game by game, with the best and worst game.
 class TodayTile extends StatelessWidget {
   const TodayTile({super.key, required this.game, required this.today});
 
@@ -15,39 +15,29 @@ class TodayTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TrackerCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CardLabel('Today · ${today.matches} ${today.matches == 1 ? 'game' : 'games'}'),
-                const SizedBox(height: 8),
-                Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: signed(today.delta), style: AppText.display(40, color: AppColors.delta(today.delta))),
-                    TextSpan(text: ' ${game.unit}', style: AppText.display(16, color: AppColors.textDim)),
-                  ]),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('${today.wins}W', style: AppText.label(color: AppColors.gain, size: 13)),
-                    const SizedBox(width: 8),
-                    Text('${today.losses}L', style: AppText.label(color: AppColors.loss, size: 13)),
-                    if (today.best != null) ...[
-                      const SizedBox(width: 12),
-                      Text('BEST ${signed(today.best!)}', style: AppText.label(size: 12)),
-                    ],
-                  ],
-                ),
+          Row(
+            children: [
+              Expanded(child: CardLabel("Today's session")),
+              if (today.best != null) ...[
+                Text('BEST ', style: AppText.label(size: 10, color: AppColors.textFaint)),
+                Text(signed(today.best!), style: AppText.display(15, color: AppColors.delta(today.best!))),
+                const SizedBox(width: 12),
+                Text('WORST ', style: AppText.label(size: 10, color: AppColors.textFaint)),
+                Text(signed(today.worst!), style: AppText.display(15, color: AppColors.delta(today.worst!))),
               ],
-            ),
+            ],
           ),
-          if (today.series.isNotEmpty) ...[
-            const SizedBox(width: 16),
-            SizedBox(width: 130, child: Sparkline(values: today.series, color: game.glow, height: 64)),
-          ],
+          const SizedBox(height: 14),
+          if (today.series.isEmpty)
+            const SizedBox(
+              height: 64,
+              child: Center(child: Text('No games today yet.', style: TextStyle(color: AppColors.textDim))),
+            )
+          else
+            Sparkline(values: today.series, color: AppColors.delta(today.delta), height: 64),
         ],
       ),
     );

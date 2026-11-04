@@ -10,26 +10,20 @@ import 'common.dart';
 
 final _number = NumberFormat.decimalPattern();
 
-/// The top card: current rank on the left, rank goal on the right.
+/// The profile card at the top: a big rank badge, the rank and score, and today at a glance.
+/// Laid out like a PhamiJam artist page: centred art, spaced-caps kicker, big name.
 class RankHero extends StatelessWidget {
-  const RankHero({
-    super.key,
-    required this.game,
-    required this.summary,
-    required this.accountName,
-    required this.goal,
-    required this.onGoalTap,
-  });
+  const RankHero({super.key, required this.game, required this.summary, required this.accountName});
 
   final Game game;
   final PlayerSummary? summary;
   final String accountName;
-  final RankGoal? goal;
-  final VoidCallback onGoalTap;
 
   @override
   Widget build(BuildContext context) {
     final s = summary;
+    final rankName = (s?.rankLabel ?? s?.rank.name ?? '—').toUpperCase();
+    final today = s?.today ?? const TodayStats();
     final tags = [
       if (s?.season?.name != null) [s!.season!.name, if (s.season!.split != null) 'Split ${s.season!.split}'].join(' · '),
       if (s?.rank.peak != null) 'Peak ${s!.rank.peak}',
@@ -38,9 +32,8 @@ class RankHero extends StatelessWidget {
     ];
 
     return TrackerCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -48,102 +41,97 @@ class RankHero extends StatelessWidget {
                 child: Text(
                   accountName,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDim),
+                  style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textDim),
                 ),
               ),
               _Status(status: s?.status),
             ],
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(color: AppColors.surfaceLow, shape: BoxShape.circle),
+            child: RankBadge(name: s?.rank.name ?? rankName, imageUrl: s?.rank.image, size: 84),
           ),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _CurrentRank(game: game, summary: s)),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onGoalTap,
-                    child: _Goal(game: game, goal: goal, summary: s),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 14),
+          Text('CURRENT RANK', style: AppText.label()),
+          const SizedBox(height: 6),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(rankName, style: AppText.display(30))),
+          const SizedBox(height: 4),
+          Text(
+            s?.score == null
+                ? '—'
+                : game == Game.valorant
+                    ? '${s!.rank.rr ?? 0} RR  ·  ${_number.format(s.score)} elo'
+                    : '${_number.format(s!.score)} RP',
+            style: AppText.mono(size: 15),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _Stat(label: 'Today', value: '${signed(today.delta)} ${game.unit}', color: AppColors.delta(today.delta)),
+              _Stat(label: 'Games', value: '${today.matches}'),
+              _Stat(
+                label: 'W / L',
+                valueSpan: TextSpan(children: [
+                  TextSpan(text: '${today.wins}', style: const TextStyle(color: AppColors.gain)),
+                  const TextSpan(text: ' / ', style: TextStyle(color: AppColors.textFaint)),
+                  TextSpan(text: '${today.losses}', style: const TextStyle(color: AppColors.loss)),
+                ]),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
-          Text(tags.join('  ·  ').toUpperCase(), style: AppText.label(color: AppColors.textFaint, size: 10)),
+          Text(
+            tags.join('  ·  ').toUpperCase(),
+            textAlign: TextAlign.center,
+            style: AppText.label(color: AppColors.textFaint, size: 10),
+          ),
         ],
       ),
     );
   }
 }
 
-class _CurrentRank extends StatelessWidget {
-  const _CurrentRank({required this.game, required this.summary});
+/// One of the three little stat blocks under the rank.
+class _Stat extends StatelessWidget {
+  const _Stat({required this.label, this.value, this.valueSpan, this.color = AppColors.text});
 
-  final Game game;
-  final PlayerSummary? summary;
+  final String label;
+  final String? value;
+  final TextSpan? valueSpan;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final s = summary;
-    final rankName = (s?.rankLabel ?? s?.rank.name ?? '—').toUpperCase();
-    final score = s?.score;
-    final today = s?.today ?? const TodayStats();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const CardLabel('Current rank', icon: Icons.shield_rounded),
-        const SizedBox(height: 14),
-        Row(
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(color: AppColors.surfaceLow, borderRadius: BorderRadius.circular(14)),
+        child: Column(
           children: [
-            RankBadge(name: s?.rank.name ?? rankName, imageUrl: s?.rank.image),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(rankName, style: AppText.display(22)),
-              ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text.rich(valueSpan ?? TextSpan(text: value), style: AppText.display(18, color: color)),
             ),
+            const SizedBox(height: 3),
+            Text(label.toUpperCase(), style: AppText.label(size: 9, color: AppColors.textFaint)),
           ],
         ),
-        const SizedBox(height: 12),
-        Text(
-          score == null
-              ? '—'
-              : game == Game.valorant
-                  ? '${s!.rank.rr ?? 0} RR'
-                  : '${_number.format(score)} RP',
-          style: AppText.display(28),
-        ),
-        const Spacer(),
-        const SizedBox(height: 16),
-        Text('TODAY', style: AppText.label()),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '${signed(today.delta)} ${game.unit} · ${today.matches} ${today.matches == 1 ? 'GAME' : 'GAMES'}',
-            style: AppText.display(18, color: AppColors.delta(today.delta)),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _Goal extends StatelessWidget {
-  const _Goal({required this.game, required this.goal, required this.summary});
+/// The rank goal: target rank art + name in gold, what's left, a gold progress bar and the pace.
+class GoalCard extends StatelessWidget {
+  const GoalCard({super.key, required this.game, required this.goal, required this.summary, required this.onTap});
 
   final Game game;
   final RankGoal? goal;
   final PlayerSummary? summary;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -151,20 +139,33 @@ class _Goal extends StatelessWidget {
     final score = summary?.score;
     if (goal == null) {
       final suggestion = score == null ? null : nextRank(game, score);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const CardLabel('Rank goal', icon: Icons.gps_fixed_rounded),
-          const SizedBox(height: 14),
-          Text('SET A GOAL', style: AppText.display(22, color: AppColors.goalSoft)),
-          const SizedBox(height: 10),
-          Text(
-            suggestion == null ? 'Pick the rank you\'re grinding for.' : 'Next up: ${suggestion.label}',
-            style: const TextStyle(color: AppColors.textDim),
-          ),
-          const Spacer(),
-          const Icon(Icons.add_circle_outline_rounded, color: AppColors.goal),
-        ],
+      return TrackerCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(color: AppColors.goal.withValues(alpha: 0.16), shape: BoxShape.circle),
+              child: const Icon(Icons.flag_rounded, color: AppColors.goal),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SET A RANK GOAL', style: AppText.display(18, color: AppColors.goalSoft)),
+                  const SizedBox(height: 4),
+                  Text(
+                    suggestion == null ? 'Pick the rank you\'re grinding for.' : 'Next up: ${suggestion.label}',
+                    style: const TextStyle(color: AppColors.textDim),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
+          ],
+        ),
       );
     }
 
@@ -172,61 +173,70 @@ class _Goal extends StatelessWidget {
     final remaining = goal.remaining(current);
     final pace = summary?.pacePerDay;
     final days = pace != null && pace > 0 && remaining > 0 ? (remaining / pace).ceil() : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const CardLabel('Rank goal', icon: Icons.gps_fixed_rounded),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            RankBadge(name: goal.label, imageUrl: goalIconUrl(game, goal.targetScore)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(goal.label.toUpperCase(), style: AppText.display(22, color: AppColors.goalSoft)),
+    final paceText = summary?.season?.goalPace(remaining, game.unit) ??
+        switch ((pace, days)) {
+          (final p?, final d?) => '~$p ${game.unit}/day · $d ${d == 1 ? 'day' : 'days'}',
+          (final p?, _) when p <= 0 => 'Pace: ${signed(p)} ${game.unit}/day',
+          _ => '${(goal.progress(current) * 100).round()}% of the way',
+        };
+
+    return TrackerCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              RankBadge(name: goal.label, imageUrl: goalIconUrl(game, goal.targetScore), size: 52),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('RANK GOAL', style: AppText.label()),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(goal.label.toUpperCase(), style: AppText.display(22, color: AppColors.goalSoft)),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (remaining == 0)
-          Text('REACHED', style: AppText.display(28, color: AppColors.gain))
-        else
-          Text.rich(
-            TextSpan(children: [
-              TextSpan(text: _number.format(remaining), style: AppText.display(28)),
-              TextSpan(text: '  ${game.unit} to go', style: const TextStyle(color: AppColors.textDim, fontSize: 13)),
-            ]),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+              if (remaining == 0)
+                Text('REACHED', style: AppText.display(18, color: AppColors.gain))
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(_number.format(remaining), style: AppText.display(24)),
+                    Text('${game.unit} TO GO', style: AppText.label(size: 9, color: AppColors.textFaint)),
+                  ],
+                ),
+            ],
           ),
-        const Spacer(),
-        const SizedBox(height: 16),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '${_number.format(current)} / ${_number.format(goal.targetScore)}',
-            style: AppText.mono(size: 12),
+          const SizedBox(height: 16),
+          ProgressBar(value: goal.progress(current), color: AppColors.goal, height: 10),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  paceText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.textDim, fontSize: 12.5),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${_number.format(current)} / ${_number.format(goal.targetScore)}',
+                style: AppText.mono(size: 12, color: AppColors.textFaint),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 6),
-        ProgressBar(value: goal.progress(current)),
-        const SizedBox(height: 6),
-        Text(
-          summary?.season?.goalPace(remaining, game.unit) ??
-          switch ((pace, days)) {
-            (final p?, final d?) => '~$p ${game.unit}/day · $d ${d == 1 ? 'day' : 'days'}',
-            (final p?, _) when p <= 0 => 'Pace: ${signed(p)} ${game.unit}/day',
-            _ => '${(goal.progress(current) * 100).round()}% of the way',
-          },
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppColors.textDim, fontSize: 12.5),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -275,13 +285,17 @@ class _Status extends StatelessWidget {
       PlayerStatus(online: true, :final text) => (text ?? 'Online', true),
       _ => ('Tracking', false),
     };
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        LiveDot(color: live ? AppColors.live : AppColors.textFaint, size: 7),
-        const SizedBox(width: 7),
-        Text(text.toUpperCase(), style: AppText.label(color: live ? AppColors.live : AppColors.textFaint, size: 10)),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: AppColors.surfaceLow, borderRadius: BorderRadius.circular(99)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LiveDot(color: live ? AppColors.live : AppColors.textFaint, size: 7),
+          const SizedBox(width: 7),
+          Text(text.toUpperCase(), style: AppText.label(color: live ? AppColors.live : AppColors.textFaint, size: 10)),
+        ],
+      ),
     );
   }
 }

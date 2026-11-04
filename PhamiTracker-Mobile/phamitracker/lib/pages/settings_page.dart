@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/game.dart';
+import '../services/changelog_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/changelog_dialog.dart';
 import '../widgets/common.dart';
 import '../widgets/game_logo.dart';
 import 'link_account_page.dart';
@@ -12,9 +13,8 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = AppScope.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.w900))),
+      appBar: AppBar(title: Text('Settings', style: AppText.display(24, weight: FontWeight.w500))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 0, 18, 40),
         children: [
@@ -28,56 +28,81 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Bullet(Icons.bolt_rounded, AppColors.accent, 'RP Today', 'Points won or lost today, plus matches and W/L.'),
+                _Bullet(Icons.bolt_rounded, 'RP Today', 'Points won or lost today, plus matches and W/L.'),
                 SizedBox(height: 14),
-                _Bullet(Icons.flag_rounded, AppColors.goal, 'Rank Goal', 'A progress ring towards the goal you set.'),
+                _Bullet(Icons.flag_rounded, 'Rank Goal', 'Your goal rank and how far you are from it.'),
                 SizedBox(height: 14),
-                _Bullet(Icons.show_chart_rounded, AppColors.accent, 'Climb', 'Your RP/RR over all time, 3 months, 1 month, 14 days or 7 days, with your last 5 matches on the large size.'),
+                _Bullet(Icons.show_chart_rounded, 'Climb', 'Your RP/RR over all time, 3 months, 1 month, 14 days or 7 days, with your last 5 matches on the large size.'),
                 SizedBox(height: 14),
-                _Bullet(Icons.map_rounded, AppColors.goal, 'Map Rotation', 'Current Apex ranked or pubs map with a live countdown.'),
+                _Bullet(Icons.map_rounded, 'Map Rotation', 'Current Apex ranked or pubs map with a live countdown.'),
                 SizedBox(height: 14),
                 _Bullet(
                   Icons.touch_app_rounded,
-                  AppColors.goal,
-                  'Pick a game',
-                  'Long-press a widget → Edit Widget to switch game, chart range or map mode. All widgets also come in lock screen sizes, and refresh themselves from the cloud tracker.',
+                  'Customise',
+                  'Long-press a widget → Edit Widget to switch game, chart range or map mode. All widgets also come in lock screen sizes.',
                 ),
               ],
             ),
           ),
           const SectionTitle('About'),
-          TrackerCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.new_releases_rounded, color: AppColors.accent),
-                  title: const Text("What's new", style: TextStyle(fontWeight: FontWeight.w700)),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangelogPage())),
-                ),
-                const Divider(height: 1, color: AppColors.border),
-                ListTile(
-                  leading: Icon(
-                    Icons.cloud_done_rounded,
-                    color: state.api.config.isConfigured ? AppColors.gain : AppColors.loss,
-                  ),
-                  title: const Text('Cloud tracker', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(
-                    state.api.config.isConfigured ? Uri.parse(state.api.config.baseUrl).host : 'Not configured',
-                    style: const TextStyle(color: AppColors.textDim),
-                  ),
-                ),
-              ],
+          FutureBuilder(
+            future: ChangelogService.load(),
+            builder: (context, snapshot) => _SettingsTile(
+              icon: Icons.info_rounded,
+              title: 'About PhamiTracker',
+              subtitle: snapshot.data?.isNotEmpty == true ? 'Version ${snapshot.data!.first.version}' : 'Version history',
+              onTap: () => showChangelogDialog(context),
             ),
           ),
           const SizedBox(height: 18),
           const Text(
-            'Data from apexlegendsapi.com and HenrikDev. PhamiTracker isn\'t endorsed by EA, Respawn or Riot Games.',
+            "Data from apexlegendsapi.com and HenrikDev. PhamiTracker isn't endorsed by EA, Respawn or Riot Games.",
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textDim, fontSize: 12),
+            style: TextStyle(color: AppColors.textFaint, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Filled row with an icon, title and subtitle (same shape as PhamiJam's settings tiles).
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({required this.icon, required this.title, required this.subtitle, this.onTap});
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.text, size: 22),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: const TextStyle(color: AppColors.textDim, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -106,8 +131,8 @@ class _AccountTile extends StatelessWidget {
           Container(
             width: 46,
             height: 46,
-            decoration: BoxDecoration(gradient: game.linearGradient, borderRadius: BorderRadius.circular(14)),
-            child: Center(child: GameLogo(game, size: 22, color: Colors.white)),
+            decoration: BoxDecoration(color: game.glow.withValues(alpha: 0.16), shape: BoxShape.circle),
+            child: Center(child: GameLogo(game, size: 22, color: game.glow)),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -152,10 +177,9 @@ class _AccountTile extends StatelessWidget {
 }
 
 class _Bullet extends StatelessWidget {
-  const _Bullet(this.icon, this.color, this.title, this.body);
+  const _Bullet(this.icon, this.title, this.body);
 
   final IconData icon;
-  final Color color;
   final String title;
   final String body;
 
@@ -164,7 +188,7 @@ class _Bullet extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: color),
+        Icon(icon, color: AppColors.textFaint),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -177,46 +201,6 @@ class _Bullet extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Shows assets/CHANGELOG.md (copied from the repo README by Codemagic on every build).
-class ChangelogPage extends StatelessWidget {
-  const ChangelogPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("What's new", style: TextStyle(fontWeight: FontWeight.w900))),
-      body: FutureBuilder(
-        future: rootBundle.loadString('assets/CHANGELOG.md'),
-        builder: (context, snapshot) {
-          final lines = (snapshot.data ?? '').split('\n');
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
-            children: [
-              for (final line in lines)
-                if (line.startsWith('#'))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 18, bottom: 6),
-                    child: Text(
-                      line.replaceFirst(RegExp(r'^#+\s*'), ''),
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: line.startsWith('##') ? 17 : 22),
-                    ),
-                  )
-                else if (line.trim().isNotEmpty && !line.startsWith('```'))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      line.replaceFirst(RegExp(r'^\s*[-*]\s+'), '•  ').replaceAll('**', '').replaceAll('`', ''),
-                      style: const TextStyle(color: AppColors.textDim, height: 1.4),
-                    ),
-                  ),
-            ],
-          );
-        },
-      ),
     );
   }
 }

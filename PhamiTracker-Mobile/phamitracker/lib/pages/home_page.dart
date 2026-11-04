@@ -73,8 +73,8 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.fromLTRB(18, 8, 18, 40),
                     sliver: SliverList.list(
                       children: [
-                        _Header(game: game),
-                        const SizedBox(height: 14),
+                        _Header(name: (state.account ?? state.accounts.values.firstOrNull)?.name),
+                        const SizedBox(height: 18),
                         GameSwitcher(
                           selected: game,
                           linked: state.accounts.keys.toSet(),
@@ -97,7 +97,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                         if (game == Game.apex && state.apexMaps != null) ...[
-                          const SectionTitle('Map rotation'),
+                          const SectionTitle('Map Rotation'),
                           RotationCard(rotation: state.apexMaps!),
                         ],
                       ],
@@ -131,16 +131,12 @@ class _Dashboard extends StatelessWidget {
           _ErrorBanner(message: state.error!),
           const SizedBox(height: 12),
         ],
-        RankHero(
-          game: game,
-          summary: summary,
-          accountName: account.displayName,
-          goal: state.goal,
-          onGoalTap: () => showGoalSheet(context, game),
-        ),
+        RankHero(game: game, summary: summary, accountName: account.displayName),
+        const SizedBox(height: 12),
+        GoalCard(game: game, goal: state.goal, summary: summary, onTap: () => showGoalSheet(context, game)),
         const SizedBox(height: 12),
         TodayTile(game: game, today: summary?.today ?? const TodayStats()),
-        const SectionTitle('Climb'),
+        const SectionTitle('Your Climb'),
         HistoryChart(
           game: game,
           history: state.climb(game),
@@ -149,11 +145,11 @@ class _Dashboard extends StatelessWidget {
           goal: state.goal,
         ),
         if (summary != null && summary.maps.isNotEmpty) ...[
-          const SectionTitle('By map'),
+          const SectionTitle('By Map'),
           MapStatsCard(game: game, maps: summary.maps),
         ],
         SectionTitle(
-          summary == null || summary.matches.isEmpty ? 'Matches' : 'Matches · ${summary.matches.length}',
+          summary == null || summary.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${summary.matches.length}',
           trailing: state.isLoading(game)
               ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: game.glow))
               : null,
@@ -164,23 +160,33 @@ class _Dashboard extends StatelessWidget {
   }
 }
 
+/// "Welcome back, Phami" with a round settings button, like PhamiJam's home header.
 class _Header extends StatelessWidget {
-  const _Header({required this.game});
+  const _Header({required this.name});
 
-  final Game game;
+  final String? name;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text('PHAMITRACKER', style: AppText.display(24)),
-        const SizedBox(width: 8),
-        Container(width: 7, height: 7, decoration: BoxDecoration(color: game.glow, shape: BoxShape.circle)),
-        const Spacer(),
-        IconButton.filledTonal(
-          style: IconButton.styleFrom(backgroundColor: AppColors.surfaceHigh),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-          icon: const Icon(Icons.tune_rounded, color: AppColors.text),
+        Expanded(
+          child: Text(
+            name == null ? 'Welcome to PhamiTracker' : 'Welcome back, $name',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.display(26, weight: FontWeight.w500),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Material(
+          color: AppColors.surfaceHigh,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+            child: const SizedBox.square(dimension: 48, child: Icon(Icons.settings_rounded, color: AppColors.text)),
+          ),
         ),
       ],
     );

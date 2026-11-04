@@ -12,7 +12,7 @@ class AppScope extends InheritedNotifier<AppState> {
   static AppState of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }
 
-/// Graphite card (top-lit gradient, hairline border), the base of every dashboard tile.
+/// Flat, filled, rounded block (PhamiJam-style), the base of every dashboard tile.
 class TrackerCard extends StatelessWidget {
   const TrackerCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.onTap});
 
@@ -24,11 +24,7 @@ class TrackerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = Container(
       padding: padding,
-      decoration: BoxDecoration(
-        gradient: AppColors.cardGradient,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
       child: child,
     );
     return onTap == null ? card : GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: card);
@@ -59,6 +55,7 @@ class CardLabel extends StatelessWidget {
   }
 }
 
+/// Big title-case section header, like PhamiJam's "Your Playlists".
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.title, {super.key, this.trailing});
 
@@ -68,8 +65,13 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
-      child: CardLabel(title, color: AppColors.textFaint, trailing: trailing),
+      padding: const EdgeInsets.fromLTRB(2, 28, 2, 12),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: AppText.display(22, weight: FontWeight.w500))),
+          ?trailing,
+        ],
+      ),
     );
   }
 }

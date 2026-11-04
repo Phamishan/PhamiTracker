@@ -68,8 +68,21 @@ class _MatchTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
         children: [
-          // Result stripe: green win, red loss.
-          Container(width: 3, height: 32, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+          // Result tile: green up arrow for a gain, red down for a loss.
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)),
+            child: Icon(
+              match.isAdjustment
+                  ? Icons.tune_rounded
+                  : match.delta >= 0
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
+              color: color,
+              size: 20,
+            ),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -201,13 +214,12 @@ class _RotationTile extends StatelessWidget {
     final name = [current.map, if (label == 'Mixtape' && current.mode != null) current.mode].join(' · ');
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(26),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         height: large ? 190 : 120,
         decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(20),
           image: current.image == null
               ? null
               : DecorationImage(image: NetworkImage(current.image!), fit: BoxFit.cover, onError: (_, _) {}),

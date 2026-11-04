@@ -10,7 +10,7 @@ enum Game {
     unit: 'RP',
     logoSvg: _apexLogo,
     gradient: [Color(0xFFEF6A4F), Color(0xFFC9402C)],
-    glow: Color(0xFFE5533D),
+    glow: Color(0xFFE0604E),
   ),
   valorant(
     id: 'valorant',
