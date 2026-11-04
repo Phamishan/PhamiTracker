@@ -5,6 +5,7 @@ import '../models/summary.dart';
 import '../services/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/game_logo.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/history_chart.dart';
 import '../widgets/match_list.dart';
@@ -172,7 +173,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text('PhamiTracker', style: AppText.display(28)),
+        Text('PHAMITRACKER', style: AppText.display(24)),
         const SizedBox(width: 8),
         Container(width: 7, height: 7, decoration: BoxDecoration(color: game.glow, shape: BoxShape.circle)),
         const Spacer(),
@@ -198,9 +199,9 @@ class _LinkPrompt extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(game.icon, size: 40, color: game.glow),
+          GameLogo(game, size: 40, color: game.glow),
           const SizedBox(height: 14),
-          Text('Track your ${game.title} rank', style: AppText.display(24)),
+          Text('TRACK YOUR ${game.title.toUpperCase()} RANK', style: AppText.display(22)),
           const SizedBox(height: 8),
           Text(
             'Link your account and every ranked game is logged in the cloud, minute by minute, '
@@ -273,7 +274,7 @@ class GradientButton extends StatelessWidget {
               child: Center(
                 child: busy
                     ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                    : Text(label, style: AppText.display(17, color: Colors.white, weight: FontWeight.w600)),
+                    : Text(label.toUpperCase(), style: AppText.label(color: Colors.white, size: 14)),
               ),
             ),
           ),

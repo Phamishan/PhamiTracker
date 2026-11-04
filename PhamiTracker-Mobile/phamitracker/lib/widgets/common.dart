@@ -35,7 +35,7 @@ class TrackerCard extends StatelessWidget {
   }
 }
 
-/// Small dim label, optionally with a leading icon: `◎ Rank goal`.
+/// Spaced-out capital label, optionally with a leading icon: `◎ RANK GOAL`.
 class CardLabel extends StatelessWidget {
   const CardLabel(this.text, {super.key, this.icon, this.color = AppColors.textDim, this.trailing});
 
@@ -52,7 +52,7 @@ class CardLabel extends StatelessWidget {
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 8),
         ],
-        Flexible(child: Text(text, style: AppText.label(color: color), overflow: TextOverflow.ellipsis)),
+        Flexible(child: Text(text.toUpperCase(), style: AppText.label(color: color), overflow: TextOverflow.ellipsis)),
         if (trailing != null) ...[const Spacer(), trailing!],
       ],
     );
@@ -69,7 +69,7 @@ class SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
-      child: CardLabel(title, color: AppColors.text, trailing: trailing),
+      child: CardLabel(title, color: AppColors.textFaint, trailing: trailing),
     );
   }
 }

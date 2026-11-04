@@ -28,28 +28,34 @@ class AppColors {
   );
 }
 
-/// Roboto throughout: small dim labels, bold numbers, regular body text.
+/// Space Grotesk throughout: spaced-out capitals for labels, bold capitals for headlines.
 class AppText {
-  /// Card and section labels: `Today · 6 games`.
-  static TextStyle label({Color color = AppColors.textDim, double size = 13}) =>
-      TextStyle(fontFamily: 'Roboto', fontSize: size, fontWeight: FontWeight.w500, color: color);
+  /// Card and section labels: `TODAY · 6 GAMES`. Callers pass the text upper-cased.
+  static TextStyle label({Color color = AppColors.textDim, double size = 11}) => TextStyle(
+        fontFamily: 'SpaceGrotesk',
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+        letterSpacing: size * 0.16,
+        color: color,
+      );
 
   /// Numbers that should line up: `13,460 / 16,000`, countdowns.
   static TextStyle mono({Color color = AppColors.textDim, double size = 13}) => TextStyle(
-        fontFamily: 'Roboto',
+        fontFamily: 'SpaceGrotesk',
         fontSize: size,
         color: color,
+        letterSpacing: 0.4,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 
-  /// Headline numbers and names: `Diamond III`, `+359`.
+  /// Headline numbers and names: `DIAMOND III`, `+359`.
   static TextStyle display(double size, {Color color = AppColors.text, FontWeight weight = FontWeight.w700}) => TextStyle(
-        fontFamily: 'Roboto',
+        fontFamily: 'SpaceGrotesk',
         fontSize: size,
-        fontWeight: weight == FontWeight.w800 ? FontWeight.w700 : weight,
+        fontWeight: weight == FontWeight.w800 || weight == FontWeight.w900 ? FontWeight.w700 : weight,
         color: color,
         height: 1.1,
-        letterSpacing: -0.3,
+        letterSpacing: size * 0.02,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 }
@@ -58,7 +64,7 @@ ThemeData buildTheme() {
   final base = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
-    fontFamily: 'Roboto',
+    fontFamily: 'SpaceGrotesk',
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
       brightness: Brightness.dark,

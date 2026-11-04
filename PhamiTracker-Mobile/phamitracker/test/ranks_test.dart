@@ -45,4 +45,12 @@ void main() {
     expect(season.goalPace(300, 'RP', now: DateTime.utc(2026, 11, 3, 8)), 'Split ends in 10h · ~300 RP/day');
     expect(season.goalPace(300, 'RP', now: DateTime.utc(2026, 11, 4)), isNull);
   });
+
+  test('goal rank icons', () {
+    expect(goalIconUrl(Game.apex, 11400), 'https://api.mozambiquehe.re/assets/ranks/diamond4.png');
+    expect(goalIconUrl(Game.apex, 15000), 'https://api.mozambiquehe.re/assets/ranks/master.png');
+    expect(goalIconUrl(Game.apex, 12000), endsWith('/diamond4.png')); // custom RP goal
+    expect(goalIconUrl(Game.valorant, 1800), endsWith('/21/largeicon.png')); // Ascendant 1
+    expect(goalIconUrl(Game.valorant, 2400), endsWith('/27/largeicon.png')); // Radiant
+  });
 }

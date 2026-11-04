@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/account.dart';
 import '../models/game.dart';
+import '../models/ranks.dart';
 import '../models/summary.dart';
 import 'tracker_api.dart';
 
@@ -29,7 +30,9 @@ class WidgetBridge {
               'playerId': account.playerId,
               'name': account.displayName,
               'unit': game.unit,
-              'goal': goals[game]?.toJson(),
+              'goal': goals[game] == null
+                  ? null
+                  : {...goals[game]!.toJson(), 'icon': goalIconUrl(game, goals[game]!.targetScore)},
               'snapshot': snapshotJson(summaries[game]),
             },
       },

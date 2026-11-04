@@ -92,8 +92,8 @@ class _RangeToggle extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    r.label,
-                    style: AppText.label(size: 12, color: r == range ? AppColors.text : AppColors.textFaint),
+                    r.label.toUpperCase(),
+                    style: AppText.label(size: 11, color: r == range ? AppColors.text : AppColors.textFaint),
                   ),
                 ),
               ),

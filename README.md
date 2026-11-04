@@ -51,3 +51,11 @@
   - Fixed overlapping dates on the Climb chart
   - Added thousands separators to totals
   - Updated readme
+- 1.0.3 - 04/11/2026
+  - Changed the font to Space Grotesk (app and widgets)
+  - Brought back spaced-out capitals
+  - Added the rank icon to the rank goal (app and Rank Goal widget)
+  - Replaced the fire and triangle icons with the Apex Legends and VALORANT logos
+  - Added game logos to the widgets
+  - Fixed the today line wrapping on the rank card
+  - Updated readme

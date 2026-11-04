@@ -18,9 +18,11 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		7D1D6E000000000000000001 /* PhamiTrackerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000006 /* PhamiTrackerWidget.swift */; };
 		7D1D6E000000000000000002 /* PhamiTrackerWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000005 /* PhamiTrackerWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		7D1D6E000000000000000024 /* Roboto-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000021 /* Roboto-Regular.ttf */; };
-		7D1D6E000000000000000025 /* Roboto-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000022 /* Roboto-Medium.ttf */; };
-		7D1D6E000000000000000026 /* Roboto-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000023 /* Roboto-Bold.ttf */; };
+		7D1D6E000000000000000024 /* SpaceGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000021 /* SpaceGrotesk-Regular.ttf */; };
+		7D1D6E000000000000000025 /* SpaceGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000022 /* SpaceGrotesk-Medium.ttf */; };
+		7D1D6E000000000000000026 /* SpaceGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000023 /* SpaceGrotesk-Bold.ttf */; };
+		7D1D6E00000000000000002B /* logo-apex@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000029 /* logo-apex@3x.png */; };
+		7D1D6E00000000000000002C /* logo-valorant@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 7D1D6E00000000000000002A /* logo-valorant@3x.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,9 +89,11 @@
 		7D1D6E000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7D1D6E000000000000000008 /* PhamiTrackerWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PhamiTrackerWidget.entitlements; sourceTree = "<group>"; };
 		7D1D6E000000000000000009 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
-		7D1D6E000000000000000021 /* Roboto-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Roboto-Regular.ttf; sourceTree = "<group>"; };
-		7D1D6E000000000000000022 /* Roboto-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Roboto-Medium.ttf; sourceTree = "<group>"; };
-		7D1D6E000000000000000023 /* Roboto-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Roboto-Bold.ttf; sourceTree = "<group>"; };
+		7D1D6E000000000000000021 /* SpaceGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SpaceGrotesk-Regular.ttf; sourceTree = "<group>"; };
+		7D1D6E000000000000000022 /* SpaceGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SpaceGrotesk-Medium.ttf; sourceTree = "<group>"; };
+		7D1D6E000000000000000023 /* SpaceGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SpaceGrotesk-Bold.ttf; sourceTree = "<group>"; };
+		7D1D6E000000000000000029 /* logo-apex@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "logo-apex@3x.png"; sourceTree = "<group>"; };
+		7D1D6E00000000000000002A /* logo-valorant@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "logo-valorant@3x.png"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +170,7 @@
 			isa = PBXGroup;
 			children = (
 				7D1D6E000000000000000020 /* Fonts */,
+				7D1D6E000000000000000028 /* Logos */,
 				7D1D6E000000000000000006 /* PhamiTrackerWidget.swift */,
 				7D1D6E000000000000000007 /* Info.plist */,
 				7D1D6E000000000000000008 /* PhamiTrackerWidget.entitlements */,
@@ -176,11 +181,20 @@
 		7D1D6E000000000000000020 /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
-				7D1D6E000000000000000021 /* Roboto-Regular.ttf */,
-				7D1D6E000000000000000022 /* Roboto-Medium.ttf */,
-				7D1D6E000000000000000023 /* Roboto-Bold.ttf */,
+				7D1D6E000000000000000021 /* SpaceGrotesk-Regular.ttf */,
+				7D1D6E000000000000000022 /* SpaceGrotesk-Medium.ttf */,
+				7D1D6E000000000000000023 /* SpaceGrotesk-Bold.ttf */,
 			);
 			path = Fonts;
+			sourceTree = "<group>";
+		};
+		7D1D6E000000000000000028 /* Logos */ = {
+			isa = PBXGroup;
+			children = (
+				7D1D6E000000000000000029 /* logo-apex@3x.png */,
+				7D1D6E00000000000000002A /* logo-valorant@3x.png */,
+			);
+			path = Logos;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -310,9 +324,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7D1D6E000000000000000024 /* Roboto-Regular.ttf in Resources */,
-				7D1D6E000000000000000025 /* Roboto-Medium.ttf in Resources */,
-				7D1D6E000000000000000026 /* Roboto-Bold.ttf in Resources */,
+				7D1D6E00000000000000002B /* logo-apex@3x.png in Resources */,
+				7D1D6E00000000000000002C /* logo-valorant@3x.png in Resources */,
+				7D1D6E000000000000000024 /* SpaceGrotesk-Regular.ttf in Resources */,
+				7D1D6E000000000000000025 /* SpaceGrotesk-Medium.ttf in Resources */,
+				7D1D6E000000000000000026 /* SpaceGrotesk-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

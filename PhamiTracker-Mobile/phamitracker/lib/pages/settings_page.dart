@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/game.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/game_logo.dart';
 import 'link_account_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -106,7 +107,7 @@ class _AccountTile extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(gradient: game.linearGradient, borderRadius: BorderRadius.circular(14)),
-            child: Icon(game.icon, color: Colors.white),
+            child: Center(child: GameLogo(game, size: 22, color: Colors.white)),
           ),
           const SizedBox(width: 14),
           Expanded(

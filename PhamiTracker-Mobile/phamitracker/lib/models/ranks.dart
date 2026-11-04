@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'game.dart';
+import 'summary.dart' show valorantTierIcon;
 
 /// One step on a game's ladder, reached at [minScore] (Apex RP / VALORANT elo).
 class RankStep {
@@ -72,4 +73,13 @@ const _tierColors = {
 Color rankColor(String? rankName) {
   final tier = (rankName ?? '').trim().split(' ').first.toLowerCase();
   return _tierColors[tier] ?? const Color(0xFF9AA3B5);
+}
+
+/// Rank art for a goal: the rank its target score lands in (so custom RP goals get an icon too).
+String? goalIconUrl(Game game, int targetScore) {
+  if (game == Game.valorant) return valorantTierIcon((targetScore ~/ 100 + 3).clamp(3, 27));
+  // Apex art is named like "diamond3.png" / "master.png" on apexlegendsapi.com.
+  final [tier, ...division] = rankAt(game, targetScore).label.split(' ');
+  final number = division.isEmpty ? '' : '${const {'IV': 4, 'III': 3, 'II': 2, 'I': 1}[division.first]}';
+  return 'https://api.mozambiquehe.re/assets/ranks/${tier.toLowerCase()}$number.png';
 }

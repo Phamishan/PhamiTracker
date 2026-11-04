@@ -76,9 +76,9 @@ class _MatchTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(16, weight: FontWeight.w500)),
+                Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(15)),
                 const SizedBox(height: 3),
-                Text(details, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.label(size: 12)),
+                Text(details.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.label(size: 10)),
               ],
             ),
           ),
@@ -123,11 +123,11 @@ class MapStatsCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(stat.map, style: AppText.display(16, weight: FontWeight.w500)),
+                      Text(stat.map.toUpperCase(), style: AppText.display(15)),
                       const SizedBox(height: 3),
                       Text(
-                        '${stat.matches} games · ${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'gains' : 'wins'}',
-                        style: AppText.label(size: 12),
+                        '${stat.matches} GAMES · ${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
+                        style: AppText.label(size: 10),
                       ),
                     ],
                   ),
@@ -235,14 +235,14 @@ class _RotationTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: Text(label, style: AppText.label(color: Colors.white, size: 12)),
+                    child: Text(label.toUpperCase(), style: AppText.label(color: Colors.white, size: 10)),
                   ),
                   const Spacer(),
                   if (pair.next != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.35), borderRadius: BorderRadius.circular(99)),
-                      child: Text('Next: ${pair.next!.map}', style: AppText.label(color: Colors.white, size: 12)),
+                      child: Text('NEXT: ${pair.next!.map.toUpperCase()}', style: AppText.label(color: Colors.white, size: 10)),
                     ),
                 ],
               ),
@@ -252,12 +252,12 @@ class _RotationTile extends StatelessWidget {
                   children: [
                     const LiveDot(color: AppColors.accent, size: 7),
                     const SizedBox(width: 8),
-                    Text('Now playing', style: AppText.label(color: Colors.white, size: 12)),
+                    Text('NOW PLAYING', style: AppText.label(color: Colors.white, size: 10)),
                   ],
                 ),
               const SizedBox(height: 4),
               Text(
-                name,
+                name.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppText.display(large ? 30 : 22, color: Colors.white).copyWith(
@@ -273,7 +273,7 @@ class _RotationTile extends StatelessWidget {
                     Text(_countdown(remaining), style: AppText.mono(color: Colors.white, size: large ? 20 : 15)),
                     const SizedBox(width: 10),
                     Text(
-                      'Ends ${DateFormat.jm().format(current.end!)}',
+                      'ENDS ${DateFormat.jm().format(current.end!).toUpperCase()}',
                       style: AppText.mono(color: Colors.white70, size: 12),
                     ),
                   ],

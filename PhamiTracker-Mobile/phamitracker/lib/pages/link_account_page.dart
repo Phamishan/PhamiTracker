@@ -4,6 +4,7 @@ import '../models/game.dart';
 import '../services/tracker_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/game_logo.dart';
 import 'home_page.dart';
 
 /// Link (or replace) the account tracked for one game.
@@ -84,7 +85,7 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
           Container(
             height: 120,
             decoration: BoxDecoration(gradient: game.linearGradient, borderRadius: BorderRadius.circular(26)),
-            child: Center(child: Icon(game.icon, size: 64, color: Colors.white)),
+            child: Center(child: GameLogo(game, size: 64, color: Colors.white)),
           ),
           const SizedBox(height: 24),
           Row(

@@ -26,18 +26,18 @@ class TodayTile extends StatelessWidget {
                 Text.rich(
                   TextSpan(children: [
                     TextSpan(text: signed(today.delta), style: AppText.display(40, color: AppColors.delta(today.delta))),
-                    TextSpan(text: ' ${game.unit}', style: AppText.label(size: 16)),
+                    TextSpan(text: ' ${game.unit}', style: AppText.display(16, color: AppColors.textDim)),
                   ]),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text('${today.wins}W', style: AppText.label(color: AppColors.gain, size: 14)),
+                    Text('${today.wins}W', style: AppText.label(color: AppColors.gain, size: 13)),
                     const SizedBox(width: 8),
-                    Text('${today.losses}L', style: AppText.label(color: AppColors.loss, size: 14)),
+                    Text('${today.losses}L', style: AppText.label(color: AppColors.loss, size: 13)),
                     if (today.best != null) ...[
                       const SizedBox(width: 12),
-                      Text('Best ${signed(today.best!)}', style: AppText.label(size: 14)),
+                      Text('BEST ${signed(today.best!)}', style: AppText.label(size: 12)),
                     ],
                   ],
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/game.dart';
 import '../theme/app_theme.dart';
+import 'game_logo.dart';
 
 /// Segmented control for switching games. The selected segment lifts onto a lighter surface.
 class GameSwitcher extends StatelessWidget {
@@ -41,7 +42,7 @@ class GameSwitcher extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(game.icon, size: 16, color: game == selected ? game.glow : AppColors.textFaint),
+                      GameLogo(game, size: 16, color: game == selected ? game.glow : AppColors.textFaint),
                       const SizedBox(width: 8),
                       Text(
                         game.shortTitle,

@@ -109,18 +109,18 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Platinum I'), findsOneWidget);
+    expect(find.text('PLATINUM I'), findsOneWidget);
     expect(find.text('10,900 RP'), findsOneWidget);
-    expect(find.text('Set a goal'), findsOneWidget);
-    expect(find.text('In match · Wraith'), findsOneWidget);
+    expect(find.text('SET A GOAL'), findsOneWidget);
+    expect(find.text('IN MATCH · WRAITH'), findsOneWidget);
     expect(find.text('2W'), findsOneWidget);
     expect(find.text('7D'), findsOneWidget);
-    expect(find.text('Matches · 2'), findsOneWidget);
+    expect(find.text('MATCHES · 2'), findsOneWidget);
 
     await tester.tap(find.text('VALORANT'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Track your VALORANT rank'), findsOneWidget);
+    expect(find.text('TRACK YOUR VALORANT RANK'), findsOneWidget);
 
     // Unmount so the live-refresh timer is cancelled.
     await tester.pumpWidget(const SizedBox());
@@ -141,9 +141,9 @@ void main() {
     ];
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: MatchList(game: Game.apex, matches: matches)))));
     expect(tester.getSize(find.byType(MatchList)).height, closeTo(MatchList.rowHeight * 5 + 8, 2));
-    expect(find.text('Map 11'), findsNothing);
+    expect(find.text('MAP 11'), findsNothing);
     await tester.drag(find.byType(ListView), const Offset(0, -2000));
     await tester.pumpAndSettle();
-    expect(find.text('Map 11'), findsOneWidget);
+    expect(find.text('MAP 11'), findsOneWidget);
   });
 }
