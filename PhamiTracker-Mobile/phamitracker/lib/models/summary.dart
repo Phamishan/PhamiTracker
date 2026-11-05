@@ -1,4 +1,5 @@
 import 'game.dart';
+import 'insights.dart';
 
 int? _int(Object? v) => v is num ? v.toInt() : null;
 DateTime? _time(Object? v) => v is num ? DateTime.fromMillisecondsSinceEpoch(v.toInt()) : null;
@@ -22,6 +23,10 @@ class PlayerSummary {
     this.error,
     this.season,
     this.tracked = true,
+    this.characters = const [],
+    this.predator,
+    this.split,
+    this.previousSplit,
   });
 
   final Game game;
@@ -44,6 +49,16 @@ class PlayerSummary {
 
   /// Search results: whether anyone tracks this account (so its matches were recorded).
   final bool tracked;
+
+  /// RP/RR per legend (Apex) or agent (VALORANT) this split/act.
+  final List<MapStat> characters;
+
+  /// Apex only: the Predator cutoff on the player's platform.
+  final PredatorInfo? predator;
+
+  /// This split/act so far (recap + records), and the last one for a while after a reset.
+  final PeriodStats? split;
+  final PeriodStats? previousSplit;
 
   /// Average points per day over the charted history ("~116 RP/day"), or null without enough data.
   int? get pacePerDay {
@@ -79,6 +94,12 @@ class PlayerSummary {
       error: json['error'] as String?,
       season: SeasonInfo.tryParse(json['season']),
       tracked: json['tracked'] != false,
+      characters: [
+        for (final c in (json['characters'] as List? ?? const [])) MapStat.fromJson(c as Map<String, dynamic>),
+      ],
+      predator: PredatorInfo.tryParse(json['predator']),
+      split: PeriodStats.tryParse(json['split']),
+      previousSplit: PeriodStats.tryParse(json['previousSplit']),
     );
   }
 }
@@ -178,7 +199,8 @@ class MapStat {
   final int wins;
 
   factory MapStat.fromJson(Map<String, dynamic> json) => MapStat(
-        map: json['map'] as String,
+        // Maps send `map`; legends/agents send `name`.
+        map: (json['map'] ?? json['name']) as String,
         matches: _int(json['matches']) ?? 0,
         delta: _int(json['delta']) ?? 0,
         wins: _int(json['wins']) ?? 0,
@@ -191,12 +213,17 @@ class MatchEntry {
     required this.delta,
     required this.scoreAfter,
     required this.isAdjustment,
+    this.matchId,
     this.map,
     this.character,
     this.rank,
     this.kills,
     this.deaths,
     this.assists,
+    this.headshots,
+    this.bodyshots,
+    this.legshots,
+    this.combatScore,
     this.won,
     this.roundsWon,
     this.roundsLost,
@@ -208,6 +235,9 @@ class MatchEntry {
 
   /// Season resets / corrections rather than a played game.
   final bool isAdjustment;
+
+  /// VALORANT match id (opens the full scoreboard). Null for Apex.
+  final String? matchId;
   final String? map;
 
   /// Apex legend or VALORANT agent.
@@ -216,6 +246,12 @@ class MatchEntry {
   final int? kills;
   final int? deaths;
   final int? assists;
+
+  /// VALORANT shot breakdown and combat score.
+  final int? headshots;
+  final int? bodyshots;
+  final int? legshots;
+  final int? combatScore;
   final bool? won;
   final int? roundsWon;
   final int? roundsLost;
@@ -225,16 +261,66 @@ class MatchEntry {
         delta: _int(json['delta']) ?? 0,
         scoreAfter: _int(json['scoreAfter']) ?? 0,
         isAdjustment: json['kind'] == 'adjust',
+        matchId: json['matchId'] as String?,
         map: json['map'] as String?,
         character: (json['legend'] ?? json['agent']) as String?,
         rank: json['rank'] as String?,
         kills: _int(json['kills']),
         deaths: _int(json['deaths']),
         assists: _int(json['assists']),
+        headshots: _int(json['headshots']),
+        bodyshots: _int(json['bodyshots']),
+        legshots: _int(json['legshots']),
+        combatScore: _int(json['score']),
         won: json['won'] as bool?,
         roundsWon: _int(json['roundsWon']),
         roundsLost: _int(json['roundsLost']),
       );
+}
+
+/// Kills, K/D and the like over the recent matches that have stats.
+class Performance {
+  const Performance({
+    required this.games,
+    this.kd,
+    this.kda,
+    this.headshotPct,
+    this.acs,
+  });
+
+  /// How many matches had stats to count.
+  final int games;
+  final double? kd;
+  final double? kda;
+  final double? headshotPct;
+  final double? acs;
+
+  static Performance? from(List<MatchEntry> matches) {
+    final played = [for (final m in matches) if (!m.isAdjustment) m];
+    final withKills = [for (final m in played) if (m.kills != null) m];
+    if (withKills.isEmpty) return null;
+
+    int sum(Iterable<MatchEntry> list, int? Function(MatchEntry) pick) =>
+        list.fold(0, (total, m) => total + (pick(m) ?? 0));
+    double? ratio(num top, num bottom) => bottom > 0 ? top / bottom : null;
+
+    final withDeaths = [for (final m in withKills) if (m.deaths != null) m];
+    final kills = sum(withDeaths, (m) => m.kills);
+    final deaths = sum(withDeaths, (m) => m.deaths);
+    final assists = sum(withDeaths, (m) => m.assists);
+    final shots = [for (final m in played) if (m.headshots != null) m];
+    final scored = [for (final m in played) if (m.combatScore != null && m.roundsWon != null) m];
+    return Performance(
+      games: withKills.length,
+      kd: withDeaths.isEmpty ? null : ratio(kills, deaths == 0 ? 1 : deaths),
+      kda: withDeaths.isEmpty ? null : ratio(kills + assists, deaths == 0 ? 1 : deaths),
+      headshotPct: ratio(
+        100 * sum(shots, (m) => m.headshots),
+        sum(shots, (m) => m.headshots) + sum(shots, (m) => m.bodyshots) + sum(shots, (m) => m.legshots),
+      ),
+      acs: ratio(sum(scored, (m) => m.combatScore), sum(scored, (m) => (m.roundsWon ?? 0) + (m.roundsLost ?? 0))),
+    );
+  }
 }
 
 /// Current Apex season and ranked split (from apexseasons.online, via the worker).

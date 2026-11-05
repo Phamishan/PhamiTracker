@@ -32,7 +32,7 @@ class WidgetBridge {
               'unit': game.unit,
               'goal': goals[game] == null
                   ? null
-                  : {...goals[game]!.toJson(), 'icon': goalIconUrl(game, goals[game]!.targetScore)},
+                  : {...goals[game]!.toJson(), 'icon': goalIconUrl(game, goals[game]!.targetScore, label: goals[game]!.label)},
               'snapshot': snapshotJson(summaries[game]),
             },
       },

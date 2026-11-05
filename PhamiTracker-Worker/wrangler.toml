@@ -28,3 +28,6 @@ enabled = true
 #   APEX_API_KEY      - https://apexlegendsapi.com
 #   HENRIK_API_KEY    - https://docs.henrikdev.xyz
 #   APP_KEY           - shared key the app sends as X-App-Key
+#   APNS_KEY          - (optional) Apple push key (.p8 contents) for Live Activity updates
+#   APNS_KEY_ID       - (optional) that key's id
+#   APNS_TEAM_ID      - (optional) your Apple developer team id

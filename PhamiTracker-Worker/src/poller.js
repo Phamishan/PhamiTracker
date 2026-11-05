@@ -1,6 +1,7 @@
 // Polls players' ranks and records every change as a match.
 
-import { fetchApexMaps, fetchApexPlayer, rankedMapAt } from "./apex.js";
+import { fetchApexMaps, fetchApexPlayer, fetchApexPredator, rankedMapAt } from "./apex.js";
+import { pushLiveActivities } from "./live.js";
 import { fetchValorantHistory, fetchValorantMatchDetails, fetchValorantPlayer } from "./valorant.js";
 import { isApexAdjustment, nextPollDelay } from "./stats.js";
 
@@ -70,7 +71,7 @@ export async function pollPlayer(env, player) {
       ).bind(result.state.score, JSON.stringify(result.state), result.state.externalId, now, lastChangeAt, nextPollAt, player.id),
     );
     await env.DB.batch(statements);
-    return {
+    const updated = {
       ...player,
       score: result.state.score,
       state: JSON.stringify(result.state),
@@ -80,6 +81,9 @@ export async function pollPlayer(env, player) {
       error: null,
       error_count: 0,
     };
+    // New games: push the numbers to any Live Activity running for this player.
+    if (changed) await pushLiveActivities(env, updated, now).catch((err) => console.error("live activity push failed", err));
+    return updated;
   } catch (err) {
     const errorCount = (player.error_count ?? 0) + 1;
     const nextPollAt = now + nextPollDelay(player.game, { now, errorCount, rateLimited: err.status === 429 });
@@ -178,6 +182,22 @@ export function rankLabel(game, state) {
 }
 
 const toRoman = (n) => ["", "I", "II", "III", "IV"][n] ?? String(n);
+
+/** Predator cutoffs per platform, cached for 15 minutes (they move slowly). */
+export async function getApexPredator(env, now = Date.now()) {
+  const cached = await env.DB.prepare("SELECT value, expires_at FROM cache WHERE key = 'apex:predator'").first();
+  if (cached && cached.expires_at > now) return JSON.parse(cached.value);
+  try {
+    const cutoffs = await fetchApexPredator(env);
+    await env.DB.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES ('apex:predator', ?, ?)")
+      .bind(JSON.stringify(cutoffs), now + 15 * 60_000)
+      .run();
+    return cutoffs;
+  } catch (err) {
+    console.error("predator lookup failed", err);
+    return cached ? JSON.parse(cached.value) : null;
+  }
+}
 
 /** Map rotation, cached in D1 until the next rotation (at most 5 minutes). */
 export async function getApexMaps(env, now = Date.now()) {

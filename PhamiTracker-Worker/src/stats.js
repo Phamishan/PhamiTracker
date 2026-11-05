@@ -79,6 +79,76 @@ export function mapStats(matches) {
   return [...maps.values()].sort((a, b) => b.matches - a.matches || b.delta - a.delta);
 }
 
+/** RP/RR per legend (Apex) or agent (VALORANT), most played first. */
+export function characterStats(matches) {
+  const chars = new Map();
+  for (const m of matches) {
+    const name = m.detail?.legend ?? m.detail?.agent;
+    if (m.kind !== "match" || !name) continue;
+    const entry = chars.get(name) ?? { name, matches: 0, delta: 0, wins: 0 };
+    entry.matches += 1;
+    entry.delta += m.delta;
+    if (m.detail?.won ?? (m.delta > 0)) entry.wins += 1;
+    chars.set(name, entry);
+  }
+  return [...chars.values()].sort((a, b) => b.matches - a.matches || b.delta - a.delta);
+}
+
+/**
+ * Recap + records for a stretch of games (a ranked split / act): where it started and ended,
+ * the peak, streaks, best day, biggest swings and the best legend/agent.
+ */
+export function periodStats(rows, { tzOffset = 0 } = {}) {
+  const sorted = [...rows].sort((a, b) => a.ts - b.ts);
+  const games = sorted.filter((m) => m.kind === "match");
+  if (games.length === 0) return { games: 0 };
+  const won = (m) => m.detail?.won ?? (m.delta > 0);
+
+  const startScore = games[0].score_after - games[0].delta;
+  let peak = { score: startScore, ts: games[0].ts };
+  for (const m of sorted) if (m.score_after > peak.score) peak = { score: m.score_after, ts: m.ts };
+
+  let longestWinStreak = 0;
+  let run = 0;
+  for (const m of games) {
+    run = won(m) ? run + 1 : 0;
+    longestWinStreak = Math.max(longestWinStreak, run);
+  }
+  const lastWon = won(games.at(-1));
+  let streak = 0;
+  for (let i = games.length - 1; i >= 0 && won(games[i]) === lastWon; i--) streak++;
+
+  const days = new Map();
+  for (const m of games) {
+    const key = dayKey(m.ts, tzOffset);
+    days.set(key, (days.get(key) ?? 0) + m.delta);
+  }
+  const bestDay = [...days].reduce((best, [day, delta]) => (!best || delta > best.delta ? { day, delta } : best), null);
+  const gain = games.reduce((a, b) => (b.delta > a.delta ? b : a));
+  const loss = games.reduce((a, b) => (b.delta < a.delta ? b : a));
+  const characters = characterStats(games);
+  const wins = games.filter(won).length;
+
+  return {
+    games: games.length,
+    wins,
+    losses: games.length - wins,
+    net: games.reduce((sum, m) => sum + m.delta, 0),
+    startScore,
+    endScore: sorted.at(-1).score_after,
+    peak,
+    streak: { won: lastWon, count: streak },
+    longestWinStreak,
+    daysPlayed: days.size,
+    bestDay: bestDay && bestDay.delta > 0 ? bestDay : null,
+    biggestGain: gain.delta > 0 ? { delta: gain.delta, ts: gain.ts } : null,
+    biggestLoss: loss.delta < 0 ? { delta: loss.delta, ts: loss.ts } : null,
+    // Best by RP/RR gained, among legends/agents played at least twice when possible.
+    topCharacter:
+      [...characters].sort((a, b) => (b.matches > 1) - (a.matches > 1) || b.delta - a.delta)[0] ?? null,
+  };
+}
+
 /** Apex RP swings bigger than this are season resets / corrections, not a single game. */
 export const APEX_ADJUSTMENT_THRESHOLD = 1000;
 

@@ -2,7 +2,7 @@ name: phamitracker
 description: "Live rank tracker for Apex Legends and VALORANT."
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.5+1
+version: 1.0.6+1
 
 environment:
   sdk: ^3.13.7
@@ -18,6 +18,7 @@ dependencies:
   fl_chart: ^1.3.0
   intl: ^0.20.3
   flutter_svg: ^2.3.2
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:

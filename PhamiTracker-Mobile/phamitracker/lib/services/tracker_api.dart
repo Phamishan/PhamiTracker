@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/account.dart';
 import '../models/game.dart';
+import '../models/match_detail.dart';
 import '../models/summary.dart';
 
 class TrackerApiException implements Exception {
@@ -124,6 +125,21 @@ class TrackerApi {
     });
     return PlayerSummary.fromJson(json);
   }
+
+  /// Full scoreboard for one VALORANT match.
+  Future<MatchDetail> valorantMatch(String matchId, {required String region}) async =>
+      MatchDetail.fromJson(await _send('GET', '/v1/valorant/matches/$matchId', query: {'region': region}));
+
+  /// Lets the worker push each new game to a running Live Activity.
+  Future<void> registerLiveActivity(String playerId, {required String token, required bool sandbox, int? startScore}) =>
+      _send('POST', '/v1/players/$playerId/live-activity', body: {
+        'token': token,
+        'sandbox': sandbox,
+        'startScore': ?startScore,
+      });
+
+  Future<void> endLiveActivity(String playerId, String token) =>
+      _send('DELETE', '/v1/players/$playerId/live-activity/$token');
 
   Future<void> unlink(String playerId) => _send('DELETE', '/v1/players/$playerId');
 

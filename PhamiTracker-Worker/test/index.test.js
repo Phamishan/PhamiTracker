@@ -166,7 +166,53 @@ test("search validates its input", async () => {
   assert.equal((await call("/v1/search?game=valorant&name=x", { DB: emptyDb() })).error, "tag is required");
 });
 
+test("match scoreboard is fetched once and then served from the cache", async (t) => {
+  const id = "0d4e5a3c-1111-2222-3333-444455556666";
+  const fetchMock = t.mock.method(globalThis, "fetch", async (url) => {
+    assert.ok(String(url).endsWith(`/v4/match/eu/${id}`));
+    return Response.json({ data: { metadata: { match_id: id, map: { name: "Bind" } }, teams: [], players: [] } });
+  });
+  const store = new Map();
+  const db = {
+    prepare: (sql) => {
+      let args = [];
+      const stmt = {
+        bind: (...a) => ((args = a), stmt),
+        first: async () => store.get(args[0]) ?? null,
+        run: async () => (sql.startsWith("INSERT") && store.set(args[0], { value: args[1], expires_at: args[2] }), {}),
+      };
+      return stmt;
+    },
+  };
+  const first = await call(`/v1/valorant/matches/${id}?region=eu`, { DB: db, HENRIK_API_KEY: "k" });
+  const second = await call(`/v1/valorant/matches/${id}?region=eu`, { DB: db, HENRIK_API_KEY: "k" });
+  assert.equal(first.map, "Bind");
+  assert.deepEqual(second, first);
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal((await call("/v1/valorant/matches/nope", { DB: db })).error, "Bad match id");
+});
+
 test("unknown sub-routes 404", async () => {
   const env = { DB: fakeDb({ player: { id: "p1", game: "apex", created_at: now }, matches: [] }) };
   assert.equal((await call("/v1/players/p1/nope", env)).error, "Not found");
+});
+
+test("summary includes split recap, legends and survives missing season/predator data", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response("down", { status: 503 }));
+  t.mock.method(console, "error", () => {});
+  const player = {
+    id: "p1", game: "apex", platform: "PC", score: 10_150, created_at: now - 40 * DAY, last_polled_at: now,
+    state: JSON.stringify({ rank: { name: "Platinum", div: 1 } }),
+  };
+  const matches = [
+    { ts: now - 2 * DAY, delta: 100, score_after: 10_100, kind: "match", detail: JSON.stringify({ legend: "Wraith" }) },
+    { ts: now - DAY, delta: 50, score_after: 10_150, kind: "match", detail: JSON.stringify({ legend: "Wraith" }) },
+  ];
+  const res = await call("/v1/players/p1", { DB: fakeDb({ player, matches }) });
+  assert.equal(res.split.name, "Last 90 days");
+  assert.equal(res.split.games, 2);
+  assert.equal(res.split.net, 150);
+  assert.deepEqual(res.characters, [{ name: "Wraith", matches: 2, delta: 150, wins: 2 }]);
+  assert.equal(res.predator, null);
+  assert.equal(res.previousSplit, null);
 });

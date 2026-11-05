@@ -70,3 +70,21 @@
   - Removed the cloud tracker section from settings
   - Made the widget icons in settings grey
   - Updated readme
+- 1.0.5 - 04/11/2026
+  - Added player search (look up any Apex or VALORANT player without tracking them)
+  - Changed map rotation end times to Danish time (24-hour)
+  - Changed widget match times to 24-hour
+  - Updated Apex rank goals to the Season 31 RP table (Master at 16,000 RP)
+  - Updated readme
+- 1.0.6 - 05/11/2026
+  - Replaced the "Welcome back" header with your player name
+  - Added a VALORANT performance card (K/D, KDA, headshot % and ACS)
+  - Added VALORANT match scoreboards (tap a match for every player's agent, rank and stats)
+  - Added RP/RR per legend and agent
+  - Added the Apex Predator cutoff (RP to Predator, and a Predator goal that follows the cutoff)
+  - Added split and act records (streaks, best day, best and worst game, peak)
+  - Added recent searches and favourites
+  - Added a session recap you can share as an image
+  - Added a split and act recap you can share as an image
+  - Added a Live Activity for your session (lock screen and Dynamic Island)
+  - Updated readme

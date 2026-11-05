@@ -146,10 +146,67 @@ export function normalizeValorantMatches(data, { puuid, name, tag }) {
       kills: me.stats?.kills ?? null,
       deaths: me.stats?.deaths ?? null,
       assists: me.stats?.assists ?? null,
+      headshots: me.stats?.headshots ?? null,
+      bodyshots: me.stats?.bodyshots ?? null,
+      legshots: me.stats?.legshots ?? null,
+      score: me.stats?.score ?? null,
+      damage: me.stats?.damage?.dealt ?? null,
       won: team?.won ?? null,
       roundsWon: team?.rounds?.won ?? null,
       roundsLost: team?.rounds?.lost ?? null,
     };
   }
   return details;
+}
+
+/** One match's full scoreboard. */
+export async function fetchValorantMatch(env, { region, matchId }) {
+  return normalizeValorantMatch(await call(env, `/v4/match/${seg(region)}/${seg(matchId)}`));
+}
+
+const MEDIA = "https://media.valorant-api.com";
+
+export function normalizeValorantMatch(data) {
+  const meta = data?.metadata ?? {};
+  const teams = (data?.teams ?? []).map((t) => ({
+    id: t.team_id,
+    won: t.won ?? null,
+    roundsWon: t.rounds?.won ?? null,
+    roundsLost: t.rounds?.lost ?? null,
+  }));
+  const rounds = teams.length ? (teams[0].roundsWon ?? 0) + (teams[0].roundsLost ?? 0) : 0;
+  const players = (data?.players ?? []).map((p) => {
+    const s = p.stats ?? {};
+    const shots = (s.headshots ?? 0) + (s.bodyshots ?? 0) + (s.legshots ?? 0);
+    const tier = Number(p.tier?.id) || 0;
+    return {
+      puuid: p.puuid ?? null,
+      name: p.name ?? null,
+      tag: p.tag ?? null,
+      team: p.team_id ?? null,
+      agent: p.agent?.name ?? null,
+      agentIcon: p.agent?.id ? `${MEDIA}/agents/${p.agent.id}/displayicon.png` : null,
+      rank: p.tier?.name ?? null,
+      rankIcon: valorantTierIcon(tier),
+      level: p.account_level ?? null,
+      kills: s.kills ?? 0,
+      deaths: s.deaths ?? 0,
+      assists: s.assists ?? 0,
+      acs: rounds ? Math.round((s.score ?? 0) / rounds) : null,
+      adr: rounds && s.damage?.dealt != null ? Math.round(s.damage.dealt / rounds) : null,
+      headshotPct: shots ? Math.round((100 * (s.headshots ?? 0)) / shots) : null,
+    };
+  });
+  players.sort((a, b) => (b.acs ?? 0) - (a.acs ?? 0));
+  return {
+    matchId: meta.match_id ?? null,
+    map: meta.map?.name ?? null,
+    mapImage: meta.map?.id ? `${MEDIA}/maps/${meta.map.id}/listviewicon.png` : null,
+    mode: meta.queue?.name ?? null,
+    startedAt: meta.started_at ? Date.parse(meta.started_at) : null,
+    durationMs: meta.game_length_in_ms ?? null,
+    rounds,
+    teams,
+    players,
+  };
 }

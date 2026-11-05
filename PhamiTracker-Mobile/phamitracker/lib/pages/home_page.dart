@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
+import '../models/insights.dart';
 import '../models/summary.dart';
 import '../services/app_state.dart';
 import '../theme/app_theme.dart';
@@ -8,11 +9,14 @@ import '../widgets/common.dart';
 import '../widgets/game_logo.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/history_chart.dart';
+import '../widgets/insight_cards.dart';
 import '../widgets/match_list.dart';
+import '../widgets/performance_card.dart';
 import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
 import 'goal_sheet.dart';
 import 'link_account_page.dart';
+import 'match_page.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
 
@@ -137,6 +141,18 @@ class _Dashboard extends StatelessWidget {
         GoalCard(game: game, goal: state.goal, summary: summary, onTap: () => showGoalSheet(context, game)),
         const SizedBox(height: 12),
         TodayTile(game: game, today: summary?.today ?? const TodayStats()),
+        if (state.liveActivities.supported && summary != null) ...[
+          const SizedBox(height: 12),
+          LiveActivityTile(game: game),
+        ],
+        if (summary != null && Session.latest(summary.matches) != null) ...[
+          const SizedBox(height: 12),
+          SessionCard(game: game, session: Session.latest(summary.matches)!, player: account.displayName),
+        ],
+        if (game == Game.valorant && summary != null && Performance.from(summary.matches) != null) ...[
+          const SectionTitle('Performance'),
+          PerformanceCard(game: game, matches: summary.matches),
+        ],
         const SectionTitle('Your Climb'),
         HistoryChart(
           game: game,
@@ -145,9 +161,25 @@ class _Dashboard extends StatelessWidget {
           onRange: (range) => state.setClimbRange(game, range),
           goal: state.goal,
         ),
+        if (summary?.split case final split?) ...[
+          SectionTitle('This ${split.noun}'),
+          SplitRecapCard(game: game, period: split, player: account.displayName),
+          if (split.games > 0) ...[
+            const SizedBox(height: 12),
+            RecordsCard(game: game, period: split),
+          ],
+        ],
+        if (summary?.previousSplit case final previous?) ...[
+          SectionTitle('Last ${previous.noun}'),
+          SplitRecapCard(game: game, period: previous, player: account.displayName, finished: true),
+        ],
         if (summary != null && summary.maps.isNotEmpty) ...[
           const SectionTitle('By Map'),
           MapStatsCard(game: game, maps: summary.maps),
+        ],
+        if (summary != null && summary.characters.isNotEmpty) ...[
+          SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
+          MapStatsCard(game: game, maps: summary.characters),
         ],
         SectionTitle(
           summary == null || summary.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${summary.matches.length}',
@@ -155,13 +187,21 @@ class _Dashboard extends StatelessWidget {
               ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: game.glow))
               : null,
         ),
-        MatchList(game: game, matches: summary?.matches ?? const []),
+        MatchList(
+          game: game,
+          matches: summary?.matches ?? const [],
+          onOpen: game == Game.valorant
+              ? (match) => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => MatchPage(match: match, region: account.region ?? 'eu', playerName: account.displayName),
+                  ))
+              : null,
+        ),
       ],
     );
   }
 }
 
-/// "Welcome back, Phami" with round search and settings buttons, like PhamiJam's home header.
+/// The player name with round search and settings buttons, like PhamiJam's home header.
 class _Header extends StatelessWidget {
   const _Header({required this.name, required this.game});
 
@@ -174,7 +214,7 @@ class _Header extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            name == null ? 'Welcome to PhamiTracker' : 'Welcome back, $name',
+            name ?? 'PhamiTracker',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppText.display(26, weight: FontWeight.w500),

@@ -11,10 +11,15 @@
 🎯 - Rank goal with split countdown & RP/day pace
 📈 - Climb chart (all time, 3 months, 1 month, 14 days, 7 days)
 📜 - Match history (legend/agent, map, K/D/A)
-🗺️ - RP/RR per map
+🗺️ - RP/RR per map, legend and agent
+🧾 - VALORANT match scoreboards & performance (K/D, KDA, HS%, ACS)
+👑 - Apex Predator cutoff
+🏆 - Split/act recap & records
+🎮 - Session recap (shareable)
 🔄 - Apex map rotation with countdown
-🔍 - Search any player
+🔍 - Search any player, with favourites
 📱 - Home screen & lock screen widgets (RP Today, Rank Goal, Climb, Map Rotation)
+🏝️ - Live Activity (lock screen & Dynamic Island)
 🆓 - Free
 ⛔ - No ads
 ```
@@ -76,4 +81,16 @@
   - Changed map rotation end times to Danish time (24-hour)
   - Changed widget match times to 24-hour
   - Updated Apex rank goals to the Season 31 RP table (Master at 16,000 RP)
+  - Updated readme
+- 1.0.6 - 05/11/2026
+  - Replaced the "Welcome back" header with your player name
+  - Added a VALORANT performance card (K/D, KDA, headshot % and ACS)
+  - Added VALORANT match scoreboards (tap a match for every player's agent, rank and stats)
+  - Added RP/RR per legend and agent
+  - Added the Apex Predator cutoff (RP to Predator, and a Predator goal that follows the cutoff)
+  - Added split and act records (streaks, best day, best and worst game, peak)
+  - Added recent searches and favourites
+  - Added a session recap you can share as an image
+  - Added a split and act recap you can share as an image
+  - Added a Live Activity for your session (lock screen and Dynamic Island)
   - Updated readme

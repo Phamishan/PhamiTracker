@@ -1,3 +1,4 @@
+import ActivityKit
 import AppIntents
 import Charts
 import SwiftUI
@@ -609,6 +610,121 @@ struct PhamiTrackerWidgets: WidgetBundle {
     RankGoalWidget()
     ClimbWidget()
     MapRotationWidget()
+    SessionLiveActivity()
+  }
+}
+
+/// A ranked session on the lock screen / Dynamic Island. Declared identically in
+/// PhamiTrackerWidget.swift (ActivityKit matches the two by name), and ContentState's keys
+/// match live_activity.dart and the worker's live.js, which pushes updates through APNs.
+@available(iOS 16.1, *)
+struct PhamiSessionAttributes: ActivityAttributes {
+  public struct ContentState: Codable, Hashable {
+    var score: Int
+    var rank: String
+    var sessionDelta: Int
+    var games: Int
+    var wins: Int
+    var losses: Int
+    var lastDelta: Int
+    /// Unix seconds.
+    var updatedAt: Int
+  }
+
+  var game: String
+  var player: String
+  var unit: String
+}
+
+// MARK: - Live Activity (lock screen + Dynamic Island)
+
+struct SessionLiveActivity: Widget {
+  var body: some WidgetConfiguration {
+    ActivityConfiguration(for: PhamiSessionAttributes.self) { context in
+      SessionLockScreen(context: context)
+        .activityBackgroundTint(cardTop)
+        .activitySystemActionForegroundColor(.white)
+    } dynamicIsland: { context in
+      let game = TrackedGame(rawValue: context.attributes.game) ?? .apex
+      let s = context.state
+      return DynamicIsland {
+        DynamicIslandExpandedRegion(.leading) {
+          VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+              GameLogo(game: game, size: 14, color: accent)
+              Text(s.rank.uppercased()).font(grotesk(13, .bold)).lineLimit(1)
+            }
+            Text("\(s.score.formatted()) \(context.attributes.unit)").font(grotesk(12).monospacedDigit()).foregroundStyle(textDim)
+          }
+        }
+        DynamicIslandExpandedRegion(.trailing) {
+          VStack(alignment: .trailing, spacing: 2) {
+            Text(signed(s.sessionDelta)).font(display(22)).foregroundStyle(deltaColor(s.sessionDelta))
+            Text("SESSION").font(grotesk(9, .medium)).tracking(1.4).foregroundStyle(textFaint)
+          }
+        }
+        DynamicIslandExpandedRegion(.bottom) {
+          SessionFacts(state: s, unit: context.attributes.unit)
+        }
+      } compactLeading: {
+        GameLogo(game: game, size: 14, color: accent)
+      } compactTrailing: {
+        Text(signed(s.sessionDelta)).font(display(13)).foregroundStyle(deltaColor(s.sessionDelta))
+      } minimal: {
+        Text(signed(s.sessionDelta)).font(display(11)).foregroundStyle(deltaColor(s.sessionDelta)).minimumScaleFactor(0.6)
+      }
+    }
+  }
+}
+
+private struct SessionLockScreen: View {
+  let context: ActivityViewContext<PhamiSessionAttributes>
+
+  var body: some View {
+    let game = TrackedGame(rawValue: context.attributes.game) ?? .apex
+    let s = context.state
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 6) {
+        GameLogo(game: game, size: 13, color: accent)
+        Text("SESSION · \(context.attributes.player)".uppercased())
+          .font(grotesk(10, .medium)).tracking(1.4).foregroundStyle(textDim).lineLimit(1)
+        Spacer()
+        Text(Date(timeIntervalSince1970: TimeInterval(s.updatedAt)), style: .relative)
+          .font(grotesk(10)).foregroundStyle(textFaint).multilineTextAlignment(.trailing)
+      }
+      HStack(alignment: .lastTextBaseline) {
+        Text("\(signed(s.sessionDelta)) \(context.attributes.unit)")
+          .font(display(30)).foregroundStyle(deltaColor(s.sessionDelta))
+        Spacer()
+        VStack(alignment: .trailing, spacing: 2) {
+          Text(s.rank.uppercased()).font(grotesk(14, .bold)).foregroundStyle(.white).lineLimit(1)
+          Text("\(s.score.formatted()) \(context.attributes.unit)").font(grotesk(12).monospacedDigit()).foregroundStyle(textDim)
+        }
+      }
+      SessionFacts(state: s, unit: context.attributes.unit)
+    }
+    .padding(16)
+  }
+}
+
+private struct SessionFacts: View {
+  let state: PhamiSessionAttributes.ContentState
+  let unit: String
+
+  var body: some View {
+    HStack(spacing: 14) {
+      fact("GAMES", Text("\(state.games)"))
+      fact("W / L", Text("\(state.wins)").foregroundColor(gain) + Text(" / ").foregroundColor(textFaint) + Text("\(state.losses)").foregroundColor(loss))
+      fact("LAST", Text(state.games == 0 ? "—" : signed(state.lastDelta)).foregroundColor(state.games == 0 ? .white : deltaColor(state.lastDelta)))
+      Spacer()
+    }
+  }
+
+  private func fact(_ label: String, _ value: Text) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      value.font(display(15))
+      Text(label).font(grotesk(8, .medium)).tracking(1.2).foregroundStyle(textFaint)
+    }
   }
 }
 

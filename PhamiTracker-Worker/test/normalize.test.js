@@ -4,6 +4,7 @@ import { normalizeApexMaps, normalizeApexPlayer, rankedMapAt } from "../src/apex
 import {
   normalizeValorantHistoryV1,
   normalizeValorantHistoryV2,
+  normalizeValorantMatch,
   normalizeValorantMatches,
   normalizeValorantMmr,
 } from "../src/valorant.js";
@@ -82,5 +83,39 @@ test("valorant match details", () => {
     ],
     { puuid: "abc" },
   );
-  assert.deepEqual(details.m1, { agent: "Jett", kills: 21, deaths: 14, assists: 5, won: true, roundsWon: 13, roundsLost: 9 });
+  assert.deepEqual(details.m1, {
+    agent: "Jett", kills: 21, deaths: 14, assists: 5,
+    headshots: null, bodyshots: null, legshots: null, score: null, damage: null,
+    won: true, roundsWon: 13, roundsLost: 9,
+  });
+});
+
+
+test("valorant full match scoreboard", () => {
+  const m = normalizeValorantMatch({
+    metadata: {
+      match_id: "m1", map: { id: "map-uuid", name: "Ascent" }, queue: { name: "Competitive" },
+      started_at: "2026-11-04T18:00:00Z", game_length_in_ms: 2_100_000,
+    },
+    teams: [
+      { team_id: "Red", won: true, rounds: { won: 13, lost: 7 } },
+      { team_id: "Blue", won: false, rounds: { won: 7, lost: 13 } },
+    ],
+    players: [
+      { puuid: "a", name: "Low", tag: "1", team_id: "Blue", agent: { id: "sage", name: "Sage" }, tier: { id: 12, name: "Gold 1" },
+        stats: { score: 2000, kills: 8, deaths: 15, assists: 9, headshots: 2, bodyshots: 18, legshots: 0, damage: { dealt: 1600 } } },
+      { puuid: "b", name: "Phami", tag: "EUW", team_id: "Red", agent: { id: "jett", name: "Jett" }, tier: { id: 18, name: "Diamond 1" },
+        stats: { score: 6000, kills: 25, deaths: 10, assists: 3, headshots: 10, bodyshots: 30, legshots: 0, damage: { dealt: 3200 } } },
+    ],
+  });
+  assert.equal(m.map, "Ascent");
+  assert.equal(m.rounds, 20);
+  assert.equal(m.startedAt, Date.parse("2026-11-04T18:00:00Z"));
+  assert.equal(m.players[0].name, "Phami"); // sorted by ACS
+  assert.deepEqual(
+    [m.players[0].acs, m.players[0].adr, m.players[0].headshotPct, m.players[0].rank],
+    [300, 160, 25, "Diamond 1"],
+  );
+  assert.match(m.players[0].rankIcon, /\/18\/largeicon\.png$/);
+  assert.match(m.players[0].agentIcon, /agents\/jett\/displayicon\.png$/);
 });

@@ -10,7 +10,7 @@ import 'common.dart';
 
 /// Every rank change the worker picked up, newest first. Shows five, scrolls for the rest.
 class MatchList extends StatelessWidget {
-  const MatchList({super.key, required this.game, required this.matches, this.emptyText});
+  const MatchList({super.key, required this.game, required this.matches, this.emptyText, this.onOpen});
 
   static const visibleRows = 5;
   static const rowHeight = 64.0;
@@ -18,6 +18,9 @@ class MatchList extends StatelessWidget {
   final Game game;
   final List<MatchEntry> matches;
   final String? emptyText;
+
+  /// Called when a match with a full scoreboard (VALORANT) is tapped.
+  final ValueChanged<MatchEntry>? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +42,14 @@ class MatchList extends StatelessWidget {
             physics: const ClampingScrollPhysics(),
             itemCount: matches.length,
             separatorBuilder: (_, _) => const Divider(height: 1, indent: 18, endIndent: 18, color: AppColors.border),
-            itemBuilder: (context, i) => SizedBox(height: rowHeight - 1, child: _MatchTile(game: game, match: matches[i])),
+            itemBuilder: (context, i) => SizedBox(
+              height: rowHeight - 1,
+              child: _MatchTile(
+                game: game,
+                match: matches[i],
+                onTap: onOpen != null && matches[i].matchId != null ? () => onOpen!(matches[i]) : null,
+              ),
+            ),
           ),
         ),
       ),
@@ -48,10 +58,11 @@ class MatchList extends StatelessWidget {
 }
 
 class _MatchTile extends StatelessWidget {
-  const _MatchTile({required this.game, required this.match});
+  const _MatchTile({required this.game, required this.match, this.onTap});
 
   final Game game;
   final MatchEntry match;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -65,40 +76,52 @@ class _MatchTile extends StatelessWidget {
       if (match.roundsWon != null) '${match.roundsWon}–${match.roundsLost}',
     ].join('  ·  ');
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Row(
-        children: [
-          // Result tile: green up arrow for a gain, red down for a loss.
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)),
-            child: Icon(
-              match.isAdjustment
-                  ? Icons.tune_rounded
-                  : match.delta >= 0
-                      ? Icons.arrow_upward_rounded
-                      : Icons.arrow_downward_rounded,
-              color: color,
-              size: 20,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Row(
+          children: [
+            // Result tile: green up arrow for a gain, red down for a loss.
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)),
+              child: Icon(
+                match.isAdjustment
+                    ? Icons.tune_rounded
+                    : match.delta >= 0
+                    ? Icons.arrow_upward_rounded
+                    : Icons.arrow_downward_rounded,
+                color: color,
+                size: 20,
+              ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(15)),
-                const SizedBox(height: 3),
-                Text(details.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.label(size: 10)),
-              ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(15)),
+                  const SizedBox(height: 3),
+                  Text(
+                    details.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.label(size: 10),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text('${signed(match.delta)} ${game.unit}', style: AppText.display(17, color: color)),
-        ],
+            const SizedBox(width: 10),
+            Text('${signed(match.delta)} ${game.unit}', style: AppText.display(17, color: color)),
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint, size: 20),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -270,8 +293,14 @@ class _RotationTile extends StatelessWidget {
                   if (pair.next != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.35), borderRadius: BorderRadius.circular(99)),
-                      child: Text('NEXT: ${pair.next!.map.toUpperCase()}', style: AppText.label(color: Colors.white, size: 10)),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        'NEXT: ${pair.next!.map.toUpperCase()}',
+                        style: AppText.label(color: Colors.white, size: 10),
+                      ),
                     ),
                 ],
               ),
@@ -289,9 +318,10 @@ class _RotationTile extends StatelessWidget {
                 name.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppText.display(large ? 30 : 22, color: Colors.white).copyWith(
-                  shadows: const [Shadow(color: Colors.black54, blurRadius: 12)],
-                ),
+                style: AppText.display(
+                  large ? 30 : 22,
+                  color: Colors.white,
+                ).copyWith(shadows: const [Shadow(color: Colors.black54, blurRadius: 12)]),
               ),
               if (remaining != null && !remaining.isNegative) ...[
                 const SizedBox(height: 4),
@@ -299,12 +329,12 @@ class _RotationTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(_countdown(remaining), style: AppText.mono(color: Colors.white, size: large ? 20 : 15)),
-                    const SizedBox(width: 10),
                     Text(
-                      'ENDS ${danishClock(current.end!)}',
-                      style: AppText.mono(color: Colors.white70, size: 12),
+                      _countdown(remaining),
+                      style: AppText.mono(color: Colors.white, size: large ? 20 : 15),
                     ),
+                    const SizedBox(width: 10),
+                    Text('ENDS ${danishClock(current.end!)}', style: AppText.mono(color: Colors.white70, size: 12)),
                   ],
                 ),
               ],

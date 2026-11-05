@@ -83,6 +83,11 @@ export async function getApexSeason(env, now = Date.now()) {
   if (previous && cached.expires_at > now) return previous;
   try {
     const season = { ...(await fetchApexSeason()), checkedAt: now };
+    // Remember the split that just ended, for the "last split" recap.
+    const changed = previous && (previous.split !== season.split || previous.season !== season.season);
+    season.previous = changed
+      ? { season: previous.season, split: previous.split, start: previous.splitStart, end: season.splitStart ?? previous.splitEnd }
+      : previous?.previous ?? null;
     await env.DB.prepare(`INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES ('${CACHE_KEY}', ?, ?)`)
       .bind(JSON.stringify(season), now + FRESH_MS)
       .run();

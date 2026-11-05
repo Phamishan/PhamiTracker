@@ -77,6 +77,41 @@ http.Client fakeWorker({List<String>? log}) => MockClient((request) async {
           200,
         );
       }
+      if (path == '/v1/players/valorant-1') {
+        return http.Response(
+          jsonEncode({
+            ...apexSummary(),
+            'player': {'id': 'valorant-1', 'game': 'valorant', 'name': 'Phami', 'tag': 'EUW', 'region': 'eu'},
+            'rankLabel': 'Diamond 1',
+            'rank': {'name': 'Diamond 1', 'tier': 18, 'rr': 42},
+            'score': 1542,
+            'season': null,
+            'matches': [
+              {'matchId': 'm-1', 'ts': _now - 60000, 'delta': 21, 'scoreAfter': 1542, 'kind': 'match', 'agent': 'Jett', 'map': 'Ascent', 'kills': 25, 'deaths': 10, 'assists': 3},
+            ],
+          }),
+          200,
+        );
+      }
+      if (path == '/v1/valorant/matches/m-1') {
+        expect(request.url.queryParameters['region'], 'eu');
+        return http.Response(
+          jsonEncode({
+            'map': 'Ascent',
+            'mode': 'Competitive',
+            'rounds': 20,
+            'teams': [
+              {'id': 'Red', 'won': true, 'roundsWon': 13, 'roundsLost': 7},
+              {'id': 'Blue', 'won': false, 'roundsWon': 7, 'roundsLost': 13},
+            ],
+            'players': [
+              {'name': 'Phami', 'tag': 'EUW', 'team': 'Red', 'agent': 'Jett', 'rank': 'Diamond 1', 'kills': 25, 'deaths': 10, 'assists': 3, 'acs': 300, 'adr': 160, 'headshotPct': 25},
+              {'name': 'Enemy', 'tag': '1', 'team': 'Blue', 'agent': 'Sage', 'rank': 'Gold 1', 'kills': 8, 'deaths': 15, 'assists': 9, 'acs': 100},
+            ],
+          }),
+          200,
+        );
+      }
       if (path == '/v1/players/apex-1') return http.Response(jsonEncode(apexSummary()), 200);
       return http.Response('{"error":"Unknown player"}', 404);
     });
@@ -130,7 +165,7 @@ void main() {
     expect(find.text('10,900 RP'), findsOneWidget);
     expect(find.text('SET A RANK GOAL'), findsOneWidget);
     expect(find.text('CURRENT RANK'), findsOneWidget);
-    expect(find.text('Welcome back, Phami'), findsOneWidget);
+    expect(find.text('Phami'), findsWidgets);
     expect(find.text('IN MATCH · WRAITH'), findsOneWidget);
     expect(find.text('7D'), findsOneWidget);
     expect(find.text('Recent Matches · 2'), findsOneWidget);
@@ -190,6 +225,66 @@ void main() {
     expect(find.textContaining("Apex doesn't share match history"), findsOneWidget);
     expect(log.where((l) => l.startsWith('POST')), isEmpty);
     expect(state.accounts, isEmpty);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  test('performance over recent matches', () {
+    MatchEntry m({int? k, int? d, int? a, int? hs, int? bs, int? ls, int? score, bool adjust = false}) => MatchEntry(
+          time: DateTime(2026, 11, 5),
+          delta: 10,
+          scoreAfter: 0,
+          isAdjustment: adjust,
+          kills: k,
+          deaths: d,
+          assists: a,
+          headshots: hs,
+          bodyshots: bs,
+          legshots: ls,
+          combatScore: score,
+          roundsWon: score == null ? null : 13,
+          roundsLost: score == null ? null : 7,
+        );
+    final valorant = Performance.from([
+      m(k: 20, d: 10, a: 5, hs: 10, bs: 30, ls: 0, score: 5000),
+      m(k: 10, d: 10, a: 5, hs: 0, bs: 10, ls: 0, score: 3000),
+      m(adjust: true),
+    ])!;
+    expect(valorant.games, 2);
+    expect(valorant.kd, 1.5);
+    expect(valorant.kda, 2.0);
+    expect(valorant.headshotPct, 20);
+    expect(valorant.acs, 200);
+
+    expect(Performance.from([m(), m()]), isNull);
+  });
+
+  testWidgets('tapping a VALORANT match opens its scoreboard', (tester) async {
+    final state = await makeState(prefs: {
+      'game': 'valorant',
+      'account.valorant': jsonEncode({'playerId': 'valorant-1', 'game': 'valorant', 'name': 'Phami', 'tag': 'EUW', 'platform': 'pc', 'region': 'eu'}),
+    });
+    await tester.pumpWidget(PhamiTrackerApp(state: state));
+    Future<void> settle() async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    await settle();
+    final row = find.text('JETT · ASCENT');
+    await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+    await settle();
+    await tester.tap(row);
+    await settle();
+
+    expect(find.text('13 – 7'), findsOneWidget);
+    expect(find.text('Your Team'), findsOneWidget);
+    expect(find.text('Enemy Team'), findsOneWidget);
+    expect(find.text('Phami#EUW'), findsOneWidget);
+    expect(find.text('25 / 10 / 3'), findsOneWidget);
+    expect(find.text('DIAMOND 1  ·  160 ADR  ·  25% HS'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
   });

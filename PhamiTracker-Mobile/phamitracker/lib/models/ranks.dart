@@ -89,8 +89,12 @@ Color rankColor(String? rankName) {
   return _tierColors[tier] ?? const Color(0xFF9AA3B5);
 }
 
+/// Label of the Apex goal that follows the live Predator cutoff.
+const apexPredatorGoal = 'Apex Predator';
+
 /// Rank art for a goal: the rank its target score lands in (so custom RP goals get an icon too).
-String? goalIconUrl(Game game, int targetScore) {
+String? goalIconUrl(Game game, int targetScore, {String? label}) {
+  if (game == Game.apex && label == apexPredatorGoal) return 'https://api.mozambiquehe.re/assets/ranks/apexpredator1.png';
   if (game == Game.valorant) return valorantTierIcon((targetScore ~/ 100 + 3).clamp(3, 27));
   // Apex art is named like "diamond3.png" / "master.png" on apexlegendsapi.com.
   final [tier, ...division] = rankAt(game, targetScore).label.split(' ');

@@ -1,31 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
+import '../models/player_query.dart';
 import '../models/summary.dart';
 import '../services/tracker_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/game_logo.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/history_chart.dart';
 import '../widgets/match_list.dart';
+import '../widgets/performance_card.dart';
 import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
 import 'home_page.dart';
 import 'link_account_page.dart';
-
-/// Who to look up. Kept so the player page can refresh itself.
-class PlayerQuery {
-  const PlayerQuery({required this.game, required this.name, this.tag, required this.platform, this.region});
-
-  final Game game;
-  final String name;
-  final String? tag;
-  final String platform;
-  final String? region;
-
-  Future<PlayerSummary> run(TrackerApi api) =>
-      api.search(game: game, name: name, tag: tag, platform: platform, region: region);
-}
+import 'match_page.dart';
 
 /// Look up any player's rank and recent games without tracking them.
 class SearchPage extends StatefulWidget {
@@ -82,22 +72,29 @@ class _SearchPageState extends State<SearchPage> {
       return;
     }
     FocusScope.of(context).unfocus();
-    final query = PlayerQuery(
+    await _open(PlayerQuery(
       game: _game,
       name: name,
       tag: _game == Game.valorant ? tag : null,
       platform: _platform,
       region: _game == Game.valorant ? _region : null,
-    );
+    ));
+  }
+
+  /// Looks the player up, remembers the search and opens their page.
+  Future<void> _open(PlayerQuery query) async {
     setState(() {
       _busy = true;
       _error = null;
     });
+    final state = AppScope.of(context);
     try {
-      final summary = await query.run(AppScope.of(context).api);
+      final summary = await query.run(state.api);
+      final found = query.withDisplayName(summary.name);
+      state.addRecentSearch(found);
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => PlayerPage(query: query, initial: summary)),
+        MaterialPageRoute(builder: (_) => PlayerPage(query: found, initial: summary)),
       );
     } on TrackerApiException catch (e) {
       setState(() => _error = e.statusCode == 404 ? "Couldn't find that player. Check the spelling and platform." : e.message);
@@ -167,8 +164,75 @@ class _SearchPageState extends State<SearchPage> {
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
           ),
+          if (AppScope.of(context).favorites.isNotEmpty) ...[
+            const SectionTitle('Favourites'),
+            _SavedList(players: AppScope.of(context).favorites, onOpen: _busy ? null : _open),
+          ],
+          if (AppScope.of(context).recentSearches.isNotEmpty) ...[
+            SectionTitle(
+              'Recent',
+              trailing: TextButton(
+                onPressed: AppScope.of(context).clearRecentSearches,
+                child: Text('CLEAR', style: AppText.label(color: AppColors.textDim)),
+              ),
+            ),
+            _SavedList(
+              players: AppScope.of(context).recentSearches,
+              onOpen: _busy ? null : _open,
+              onRemove: AppScope.of(context).removeRecentSearch,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Favourite or recent players: tap to open, swipe a recent one away.
+class _SavedList extends StatelessWidget {
+  const _SavedList({required this.players, required this.onOpen, this.onRemove});
+
+  final List<PlayerQuery> players;
+  final ValueChanged<PlayerQuery>? onOpen;
+  final ValueChanged<PlayerQuery>? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return TrackerCard(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        children: [
+          for (final (i, q) in players.indexed) ...[
+            if (i > 0) const Divider(height: 1, indent: 18, endIndent: 18, color: AppColors.border),
+            _row(q),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(PlayerQuery q) {
+    final where = q.game == Game.apex
+        ? apexPlatforms[q.platform] ?? q.platform
+        : '${valorantRegions[q.region] ?? q.region} · ${valorantPlatforms[q.platform] ?? q.platform}';
+    final tile = ListTile(
+      onTap: onOpen == null ? null : () => onOpen!(q),
+      leading: GameLogo(q.game, size: 20, color: q.game.glow),
+      title: Text(q.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(where.toUpperCase(), style: AppText.label(size: 9, color: AppColors.textFaint)),
+      trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
+    );
+    if (onRemove == null) return tile;
+    return Dismissible(
+      key: ValueKey(q.key),
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) => onRemove!(q),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline_rounded, color: AppColors.loss),
+      ),
+      child: tile,
     );
   }
 }
@@ -200,8 +264,22 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget build(BuildContext context) {
     final s = _summary;
     final game = s.game;
+    final state = AppScope.of(context);
+    final favorite = state.isFavorite(widget.query);
     return Scaffold(
-      appBar: AppBar(title: Text(s.name)),
+      appBar: AppBar(
+        title: Text(s.name),
+        actions: [
+          IconButton(
+            tooltip: favorite ? 'Remove from favourites' : 'Add to favourites',
+            onPressed: () => state.toggleFavorite(widget.query.withDisplayName(s.name)),
+            icon: Icon(
+              favorite ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: favorite ? AppColors.goal : AppColors.textDim,
+            ),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         color: game.glow,
         onRefresh: _refresh,
@@ -212,6 +290,10 @@ class _PlayerPageState extends State<PlayerPage> {
             RankHero(game: game, summary: s, accountName: s.name),
             const SizedBox(height: 12),
             TodayTile(game: game, today: s.today),
+            if (game == Game.valorant && Performance.from(s.matches) != null) ...[
+              const SectionTitle('Performance'),
+              PerformanceCard(game: game, matches: s.matches),
+            ],
             if (s.history.isNotEmpty) ...[
               const SectionTitle('Climb'),
               HistoryChart(game: game, history: s.history, range: ClimbRange.twoWeeks),
@@ -220,10 +302,19 @@ class _PlayerPageState extends State<PlayerPage> {
               const SectionTitle('By Map'),
               MapStatsCard(game: game, maps: s.maps),
             ],
+            if (s.characters.isNotEmpty) ...[
+              SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
+              MapStatsCard(game: game, maps: s.characters),
+            ],
             SectionTitle(s.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${s.matches.length}'),
             MatchList(
               game: game,
               matches: s.matches,
+              onOpen: game == Game.valorant
+                  ? (match) => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => MatchPage(match: match, region: widget.query.region ?? 'eu', playerName: s.name),
+                      ))
+                  : null,
               emptyText: game == Game.apex && !s.tracked
                   ? "Apex doesn't share match history. Games show up here once someone tracks this account in PhamiTracker."
                   : 'No recent ranked games.',

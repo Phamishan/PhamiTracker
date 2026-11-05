@@ -27,6 +27,7 @@ class RankHero extends StatelessWidget {
     final tags = [
       if (s?.season?.name != null) [s!.season!.name, if (s.season!.split != null) 'Split ${s.season!.split}'].join(' · '),
       if (s?.rank.peak != null) 'Peak ${s!.rank.peak}',
+      ?predatorTag(s),
       if ((s?.rank.gamesNeeded ?? 0) > 0) '${s!.rank.gamesNeeded} placements left',
       'Updated ${timeAgo(s?.polledAt)}',
     ];
@@ -91,6 +92,15 @@ class RankHero extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "1,920 RP to Predator" for Masters (and "Predator cutoff 24,078" once they're above it).
+String? predatorTag(PlayerSummary? s) {
+  final cutoff = s?.predator?.cutoff;
+  final score = s?.score;
+  if (s == null || cutoff == null || score == null || s.game != Game.apex) return null;
+  if (score < apexLadder.last.minScore) return null;
+  return score < cutoff ? '${_number.format(cutoff - score)} RP to Predator' : 'Predator cutoff ${_number.format(cutoff)}';
 }
 
 /// One of the three little stat blocks under the rank.
@@ -187,7 +197,7 @@ class GoalCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              RankBadge(name: goal.label, imageUrl: goalIconUrl(game, goal.targetScore), size: 52),
+              RankBadge(name: goal.label, imageUrl: goalIconUrl(game, goal.targetScore, label: goal.label), size: 52),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

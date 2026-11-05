@@ -6,8 +6,11 @@
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   DELETE /v1/players/:id             stop tracking
+//   POST   /v1/players/:id/live-activity          register a Live Activity push token  {token, sandbox?, startScore?}
+//   DELETE /v1/players/:id/live-activity/:token   the activity ended
 //   GET    /v1/apex/maps               Apex map rotation
 //   GET    /v1/apex/season             Current season + ranked split dates
+//   GET    /v1/valorant/matches/:id    full scoreboard for one VALORANT match  ?region=
 //   GET    /v1/search                  look anyone up without tracking them
 //                                      ?game=&name=&tag=&platform=&region=&tzOffset=
 //
@@ -18,13 +21,16 @@ import {
   VALORANT_PLATFORMS,
   VALORANT_REGIONS,
   fetchValorantHistory,
+  fetchValorantMatch,
   fetchValorantMatchDetails,
   fetchValorantPlayer,
   valorantTierIcon,
 } from "./valorant.js";
-import { getApexMaps, pollDue, pollPlayer, rankLabel } from "./poller.js";
+import { LIVE_ACTIVITY_MAX_MS, endLiveActivity, registerLiveActivity } from "./live.js";
+import { currentPeriod } from "./periods.js";
+import { getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { getApexSeason } from "./seasons.js";
-import { summarize } from "./stats.js";
+import { characterStats, periodStats, summarize } from "./stats.js";
 
 const DAY = 86_400_000;
 // An app/widget asking for data more than this long after the last poll triggers a live poll.
@@ -52,7 +58,14 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(pollDue(env, controller.scheduledTime).then((counts) => console.log("polled", counts)));
     ctx.waitUntil(
-      env.DB.prepare("DELETE FROM cache WHERE key LIKE 'search:%' AND expires_at < ?").bind(controller.scheduledTime).run(),
+      env.DB.prepare("DELETE FROM cache WHERE (key LIKE 'search:%' OR key LIKE 'match:%') AND expires_at < ?")
+        .bind(controller.scheduledTime)
+        .run(),
+    );
+    ctx.waitUntil(
+      env.DB.prepare("DELETE FROM live_activities WHERE started_at < ?")
+        .bind(controller.scheduledTime - LIVE_ACTIVITY_MAX_MS)
+        .run(),
     );
   },
 };
@@ -71,6 +84,9 @@ async function route(request, env, ctx) {
   if (parts[1] === "apex" && parts[2] === "maps" && request.method === "GET") {
     return json(await getApexMaps(env));
   }
+  if (parts[1] === "valorant" && parts[2] === "matches" && parts[3] && parts.length === 4 && request.method === "GET") {
+    return valorantMatch(env, parts[3], url);
+  }
   if (parts[1] === "search" && parts.length === 2 && request.method === "GET") return search(env, url);
   if (parts[1] !== "players") return fail(404, "Not found");
 
@@ -83,10 +99,22 @@ async function route(request, env, ctx) {
 
   if (parts.length === 3 && request.method === "DELETE") {
     await env.DB.batch([
+      env.DB.prepare("DELETE FROM live_activities WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM matches WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM players WHERE id = ?").bind(player.id),
     ]);
     return json({ ok: true });
+  }
+  if (parts[3] === "live-activity") {
+    if (parts.length === 4 && request.method === "POST") {
+      const result = await registerLiveActivity(env, player, await request.json().catch(() => null));
+      return result.error ? fail(400, result.error) : json(result, 201);
+    }
+    if (parts.length === 5 && request.method === "DELETE") {
+      await endLiveActivity(env, player, parts[4]);
+      return json({ ok: true });
+    }
+    return fail(404, "Not found");
   }
   if (request.method !== "GET" || parts.length > 4 || (parts[3] && !["widget", "history"].includes(parts[3]))) {
     return fail(404, "Not found");
@@ -141,13 +169,14 @@ async function route(request, env, ctx) {
   // The match list isn't tied to the stats window: the app scrolls back through the last 100.
   const recent = (
     await env.DB.prepare(
-      "SELECT ts, delta, score_after, kind, detail FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT ?",
+      "SELECT ts, delta, score_after, kind, detail, external_id FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT ?",
     )
       .bind(player.id, widget ? 5 : 100)
       .all()
   ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
   const matches = (limit) =>
     recent.slice(0, limit).map((row) => ({
+      matchId: row.external_id ?? null,
       ts: row.ts,
       delta: row.delta,
       scoreAfter: row.score_after,
@@ -155,11 +184,38 @@ async function route(request, env, ctx) {
       ...row.detail,
     }));
   if (widget) return json({ ...base, matches: matches(5) });
+
+  // Split/act recap and records, plus the one before it for a couple of weeks after a reset.
+  const period = await currentPeriod(env, fresh.game, now, season).catch(() => null);
+  const since = Math.min(period?.start ?? now, period?.previous?.start ?? Infinity);
+  const periodRows = period
+    ? (
+        await env.DB.prepare(
+          "SELECT ts, delta, score_after, kind, detail FROM matches WHERE player_id = ? AND ts >= ? ORDER BY ts",
+        )
+          .bind(player.id, since)
+          .all()
+      ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }))
+    : [];
+  const inCurrent = periodRows.filter((m) => m.ts >= period?.start);
+  const prev = period?.previous;
+  const inPrevious = prev ? periodRows.filter((m) => m.ts >= prev.start && m.ts < (prev.end ?? period.start)) : [];
+  const split = period ? { kind: period.kind, name: period.name, start: period.start, end: period.end, ...periodStats(inCurrent, { tzOffset }) } : null;
+  const previousSplit =
+    prev && now - period.start < 14 * DAY && inPrevious.some((m) => m.kind === "match")
+      ? { kind: period.kind, name: prev.name, start: prev.start, end: prev.end, ...periodStats(inPrevious, { tzOffset }) }
+      : null;
+  const predator = fresh.game === "apex" ? (await getApexPredator(env, now))?.[fresh.platform] ?? null : null;
+
   return json({
     ...base,
     level: state?.level ?? null,
     banner: state?.banner ?? null,
     maps: stats.maps,
+    characters: characterStats(inCurrent.length ? inCurrent : rows),
+    split,
+    previousSplit,
+    predator,
     matches: matches(100),
     nextPollAt: fresh.next_poll_at,
   });
@@ -242,6 +298,26 @@ async function createPlayer(request, env) {
   return json({ player: publicPlayer(player, state), rankLabel: rankLabel(player.game, state), score: player.score }, 201);
 }
 
+// A finished match never changes, so its scoreboard is kept for a week.
+const MATCH_CACHE_MS = 7 * DAY;
+
+/** Scoreboard for one VALORANT match: every player's agent, rank and stats. */
+async function valorantMatch(env, matchId, url) {
+  if (!/^[0-9a-f-]{36}$/i.test(matchId)) return fail(400, "Bad match id");
+  const region = String(url.searchParams.get("region") ?? "eu").toLowerCase();
+  if (!VALORANT_REGIONS.includes(region)) return fail(400, `region must be one of ${VALORANT_REGIONS}`);
+  const key = `match:valorant:${matchId.toLowerCase()}`;
+  const now = Date.now();
+  const cached = await env.DB.prepare("SELECT value, expires_at FROM cache WHERE key = ?").bind(key).first();
+  if (cached && cached.expires_at > now) return json(JSON.parse(cached.value));
+
+  const match = await fetchValorantMatch(env, { region, matchId });
+  await env.DB.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)")
+    .bind(key, JSON.stringify(match), now + MATCH_CACHE_MS)
+    .run();
+  return json(match);
+}
+
 // Searches hit the game APIs directly, so repeat lookups of the same player are cached briefly.
 const SEARCH_CACHE_MS = 60_000;
 
@@ -292,7 +368,7 @@ async function search(env, url) {
   let rows = tracked
     ? (
         await env.DB.prepare(
-          "SELECT ts, delta, score_after, kind, detail FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT 100",
+          "SELECT ts, delta, score_after, kind, detail, external_id FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT 100",
         )
           .bind(tracked.id)
           .all()
@@ -312,6 +388,7 @@ async function search(env, url) {
         delta: entry.delta,
         score_after: Number.isFinite(entry.eloAfter) ? entry.eloAfter : state.score,
         kind: "match",
+        external_id: entry.matchId,
         detail: { map: entry.map, rank: entry.tier, ...(details[entry.matchId] ?? {}) },
       }));
   }
@@ -335,12 +412,15 @@ async function search(env, url) {
     history: rows.length ? stats.history : [],
     maps: stats.maps,
     matches: rows.map((row) => ({
+      matchId: row.external_id ?? null,
       ts: row.ts,
       delta: row.delta,
       scoreAfter: row.score_after,
       kind: row.kind,
       ...row.detail,
     })),
+    characters: characterStats(rows),
+    predator: game === "apex" ? (await getApexPredator(env, now).catch(() => null))?.[account.platform] ?? null : null,
     level: state.level ?? null,
     banner: state.banner ?? null,
     season: game === "apex" ? await getApexSeason(env, now).catch(() => null) : null,

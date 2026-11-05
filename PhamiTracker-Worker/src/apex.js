@@ -75,6 +75,25 @@ export function normalizeApexPlayer(body) {
   };
 }
 
+/** Apex Predator cutoffs: the RP of the 750th player on each platform. */
+export async function fetchApexPredator(env) {
+  return normalizeApexPredator(await call(env, "/predator", {}));
+}
+
+export function normalizeApexPredator(body) {
+  const out = {};
+  for (const [platform, entry] of Object.entries(body?.RP ?? {})) {
+    const cutoff = Number(entry?.val);
+    if (!Number.isFinite(cutoff) || cutoff <= 0) continue;
+    out[platform] = {
+      cutoff,
+      masters: Number(entry.totalMastersAndPreds) || null,
+      updatedAt: entry.updateTimestamp ? entry.updateTimestamp * 1000 : null,
+    };
+  }
+  return out;
+}
+
 /** Map rotation (battle royale + ranked + LTM), normalized. */
 export async function fetchApexMaps(env) {
   return normalizeApexMaps(await call(env, "/maprotation", { version: "2" }));

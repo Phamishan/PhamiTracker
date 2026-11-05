@@ -47,6 +47,7 @@ class _GoalSheetState extends State<_GoalSheet> {
     final current = state.goals[game];
     final steps = ladderFor(game).where((r) => r.minScore > score).toList();
     final number = NumberFormat.decimalPattern();
+    final predator = game == Game.apex ? state.summaries[game]?.predator : null;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -81,6 +82,18 @@ class _GoalSheetState extends State<_GoalSheet> {
             ),
           ],
           const SectionTitle('Ranks'),
+          if (predator != null && predator.cutoff > score)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _RankOption(
+                step: RankStep(apexPredatorGoal, predator.cutoff),
+                remaining: predator.cutoff - score,
+                unit: 'RP',
+                selected: current?.label == apexPredatorGoal,
+                onTap: () => _choose(apexPredatorGoal, predator.cutoff),
+                note: 'Top 750 · follows the live cutoff',
+              ),
+            ),
           if (steps.isEmpty)
             const Text('You\'re at the top of the ladder. 👑', style: TextStyle(fontWeight: FontWeight.w700)),
           for (final step in steps)
@@ -113,13 +126,21 @@ class _GoalSheetState extends State<_GoalSheet> {
 }
 
 class _RankOption extends StatelessWidget {
-  const _RankOption({required this.step, required this.remaining, required this.unit, required this.selected, required this.onTap});
+  const _RankOption({
+    required this.step,
+    required this.remaining,
+    required this.unit,
+    required this.selected,
+    required this.onTap,
+    this.note,
+  });
 
   final RankStep step;
   final int remaining;
   final String unit;
   final bool selected;
   final VoidCallback onTap;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +165,15 @@ class _RankOption extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 14),
-              Expanded(child: Text(step.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(step.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    if (note != null) Text(note!, style: const TextStyle(color: AppColors.textDim, fontSize: 12)),
+                  ],
+                ),
+              ),
               Text(
                 '+${NumberFormat.decimalPattern().format(remaining)} $unit',
                 style: const TextStyle(color: AppColors.textDim, fontWeight: FontWeight.w700),
