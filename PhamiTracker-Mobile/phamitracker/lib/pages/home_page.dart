@@ -136,23 +136,36 @@ class _Dashboard extends StatelessWidget {
           _ErrorBanner(message: state.error!),
           const SizedBox(height: 12),
         ],
+        // Order: player, (VALORANT: performance), goal, today, last session, recent matches,
+        // climb, this split/act, by legend/agent, by map. Apex's map rotation follows (HomePage).
         RankHero(game: game, summary: summary, accountName: account.displayName),
-        const SizedBox(height: 12),
-        GoalCard(game: game, goal: state.goal, summary: summary, onTap: () => showGoalSheet(context, game)),
-        const SizedBox(height: 12),
-        TodayTile(game: game, today: summary?.today ?? const TodayStats()),
-        if (state.liveActivities.supported && summary != null) ...[
-          const SizedBox(height: 12),
-          LiveActivityTile(game: game),
-        ],
-        if (summary != null && Session.latest(summary.matches) != null) ...[
-          const SizedBox(height: 12),
-          SessionCard(game: game, session: Session.latest(summary.matches)!, player: account.displayName),
-        ],
         if (game == Game.valorant && summary != null && Performance.from(summary.matches) != null) ...[
           const SectionTitle('Performance'),
           PerformanceCard(game: game, matches: summary.matches),
         ],
+        const SizedBox(height: 12),
+        GoalCard(game: game, goal: state.goal, summary: summary, onTap: () => showGoalSheet(context, game)),
+        const SizedBox(height: 12),
+        TodayTile(game: game, today: summary?.today ?? const TodayStats()),
+        if (summary != null && Session.latest(summary.matches) != null) ...[
+          const SizedBox(height: 12),
+          SessionCard(game: game, session: Session.latest(summary.matches)!, player: account.displayName),
+        ],
+        SectionTitle(
+          summary == null || summary.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${summary.matches.length}',
+          trailing: state.isLoading(game)
+              ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: game.glow))
+              : null,
+        ),
+        MatchList(
+          game: game,
+          matches: summary?.matches ?? const [],
+          onOpen: game == Game.valorant
+              ? (match) => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => MatchPage(match: match, region: account.region ?? 'eu', playerName: account.displayName),
+                  ))
+              : null,
+        ),
         const SectionTitle('Your Climb'),
         HistoryChart(
           game: game,
@@ -173,29 +186,14 @@ class _Dashboard extends StatelessWidget {
           SectionTitle('Last ${previous.noun}'),
           SplitRecapCard(game: game, period: previous, player: account.displayName, finished: true),
         ],
-        if (summary != null && summary.maps.isNotEmpty) ...[
-          const SectionTitle('By Map'),
-          MapStatsCard(game: game, maps: summary.maps),
-        ],
         if (summary != null && summary.characters.isNotEmpty) ...[
           SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
           MapStatsCard(game: game, maps: summary.characters),
         ],
-        SectionTitle(
-          summary == null || summary.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${summary.matches.length}',
-          trailing: state.isLoading(game)
-              ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: game.glow))
-              : null,
-        ),
-        MatchList(
-          game: game,
-          matches: summary?.matches ?? const [],
-          onOpen: game == Game.valorant
-              ? (match) => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => MatchPage(match: match, region: account.region ?? 'eu', playerName: account.displayName),
-                  ))
-              : null,
-        ),
+        if (summary != null && summary.maps.isNotEmpty) ...[
+          const SectionTitle('By Map'),
+          MapStatsCard(game: game, maps: summary.maps),
+        ],
       ],
     );
   }

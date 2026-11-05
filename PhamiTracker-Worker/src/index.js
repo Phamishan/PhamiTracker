@@ -6,6 +6,8 @@
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   DELETE /v1/players/:id             stop tracking
+//   POST   /v1/live/subscribe          auto Live Activities: push-to-start token  {token, sandbox?, players: [ids]}
+//   DELETE /v1/live/subscribe/:token   setting turned off
 //   POST   /v1/players/:id/live-activity          register a Live Activity push token  {token, sandbox?, startScore?}
 //   DELETE /v1/players/:id/live-activity/:token   the activity ended
 //   GET    /v1/apex/maps               Apex map rotation
@@ -26,7 +28,14 @@ import {
   fetchValorantPlayer,
   valorantTierIcon,
 } from "./valorant.js";
-import { LIVE_ACTIVITY_MAX_MS, endLiveActivity, registerLiveActivity } from "./live.js";
+import {
+  LIVE_ACTIVITY_MAX_MS,
+  endIdleSessions,
+  endLiveActivity,
+  registerLiveActivity,
+  subscribeLiveStart,
+  unsubscribeLiveStart,
+} from "./live.js";
 import { currentPeriod } from "./periods.js";
 import { getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { getApexSeason } from "./seasons.js";
@@ -62,6 +71,7 @@ export default {
         .bind(controller.scheduledTime)
         .run(),
     );
+    ctx.waitUntil(endIdleSessions(env, controller.scheduledTime).catch((err) => console.error("ending sessions failed", err)));
     ctx.waitUntil(
       env.DB.prepare("DELETE FROM live_activities WHERE started_at < ?")
         .bind(controller.scheduledTime - LIVE_ACTIVITY_MAX_MS)
@@ -87,6 +97,17 @@ async function route(request, env, ctx) {
   if (parts[1] === "valorant" && parts[2] === "matches" && parts[3] && parts.length === 4 && request.method === "GET") {
     return valorantMatch(env, parts[3], url);
   }
+  if (parts[1] === "live" && parts[2] === "subscribe") {
+    if (parts.length === 3 && request.method === "POST") {
+      const result = await subscribeLiveStart(env, await request.json().catch(() => null));
+      return result.error ? fail(400, result.error) : json(result);
+    }
+    if (parts.length === 4 && request.method === "DELETE") {
+      await unsubscribeLiveStart(env, parts[3]);
+      return json({ ok: true });
+    }
+    return fail(404, "Not found");
+  }
   if (parts[1] === "search" && parts.length === 2 && request.method === "GET") return search(env, url);
   if (parts[1] !== "players") return fail(404, "Not found");
 
@@ -100,6 +121,8 @@ async function route(request, env, ctx) {
   if (parts.length === 3 && request.method === "DELETE") {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM live_activities WHERE player_id = ?").bind(player.id),
+      env.DB.prepare("DELETE FROM live_subscriptions WHERE player_id = ?").bind(player.id),
+      env.DB.prepare("DELETE FROM live_sessions WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM matches WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM players WHERE id = ?").bind(player.id),
     ]);

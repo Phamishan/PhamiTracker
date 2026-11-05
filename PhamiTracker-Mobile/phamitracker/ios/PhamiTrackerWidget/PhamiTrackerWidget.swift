@@ -615,8 +615,8 @@ struct PhamiTrackerWidgets: WidgetBundle {
 }
 
 /// A ranked session on the lock screen / Dynamic Island. Declared identically in
-/// PhamiTrackerWidget.swift (ActivityKit matches the two by name), and ContentState's keys
-/// match live_activity.dart and the worker's live.js, which pushes updates through APNs.
+/// AppDelegate.swift (ActivityKit matches the two by name). The worker's live.js starts,
+/// updates and ends it through APNs, so its keys must match sessionAttributes / sessionState there.
 @available(iOS 16.1, *)
 struct PhamiSessionAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
@@ -634,6 +634,8 @@ struct PhamiSessionAttributes: ActivityAttributes {
   var game: String
   var player: String
   var unit: String
+  /// The worker's id for the player, so the app can hand back this activity's push token.
+  var playerId: String
 }
 
 // MARK: - Live Activity (lock screen + Dynamic Island)

@@ -179,7 +179,11 @@ class MapStatsCard extends StatelessWidget {
                       Text(stat.map.toUpperCase(), style: AppText.display(15)),
                       const SizedBox(height: 3),
                       Text(
-                        '${stat.matches} GAMES · ${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
+                        [
+                          '${stat.matches} GAMES',
+                          '${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
+                          if (stat.kd != null) 'K/D ${stat.kd!.toStringAsFixed(2)}',
+                        ].join(' · '),
                         style: AppText.label(size: 10),
                       ),
                     ],

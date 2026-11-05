@@ -298,13 +298,13 @@ class _PlayerPageState extends State<PlayerPage> {
               const SectionTitle('Climb'),
               HistoryChart(game: game, history: s.history, range: ClimbRange.twoWeeks),
             ],
-            if (s.maps.isNotEmpty) ...[
-              const SectionTitle('By Map'),
-              MapStatsCard(game: game, maps: s.maps),
-            ],
             if (s.characters.isNotEmpty) ...[
               SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
               MapStatsCard(game: game, maps: s.characters),
+            ],
+            if (s.maps.isNotEmpty) ...[
+              const SectionTitle('By Map'),
+              MapStatsCard(game: game, maps: s.maps),
             ],
             SectionTitle(s.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${s.matches.length}'),
             MatchList(

@@ -18,7 +18,6 @@ class AppState extends ChangeNotifier {
   AppState({required this.api, required this._prefs, WidgetBridge? widgets, LiveActivityService? liveActivities})
     : _widgets = widgets ?? WidgetBridge(),
       liveActivities = liveActivities ?? LiveActivityService() {
-    this.liveActivities.onToken = _onLiveToken;
     _load();
   }
 
@@ -36,11 +35,8 @@ class AppState extends ChangeNotifier {
   final List<PlayerQuery> favorites = [];
   static const maxRecentSearches = 8;
 
-  /// The game with a Live Activity running, when the session started and the score it started at.
-  Game? liveGame;
-  DateTime? liveStartedAt;
-  int? liveStartScore;
-  String? _liveToken;
+  /// Automatic Live Activity (Settings). The worker starts it when you start playing.
+  bool liveActivityEnabled = false;
 
   Game _game = Game.apex;
   final Map<Game, TrackedAccount> accounts = {};
@@ -114,18 +110,7 @@ class AppState extends ChangeNotifier {
     recentSearches.addAll(queries('search.recent'));
     favorites.addAll(queries('search.favorites'));
 
-    final live = _prefs.getString('live');
-    if (live != null) {
-      final json = jsonDecode(live) as Map<String, dynamic>;
-      liveGame = Game.fromId(json['game'] as String?);
-      liveStartedAt = DateTime.fromMillisecondsSinceEpoch((json['startedAt'] as num).toInt());
-      liveStartScore = (json['startScore'] as num?)?.toInt();
-      _liveToken = json['token'] as String?;
-      // iOS ends activities on its own (after 8 hours, or when swiped away); forget ours if so.
-      unawaited(liveActivities.isRunning().then((running) {
-        if (!running && liveGame != null) _clearLive();
-      }));
-    }
+    liveActivityEnabled = _prefs.getBool('live.enabled') ?? false;
   }
 
   // MARK: Search history
@@ -170,94 +155,22 @@ class AppState extends ChangeNotifier {
 
   // MARK: Live Activity
 
-  /// Shows this session on the lock screen and in the Dynamic Island. The worker pushes each new
-  /// game to it, so it keeps updating with the app closed.
-  Future<bool> startLiveActivity(Game game) async {
-    final account = accounts[game];
-    final summary = summaries[game];
-    if (account == null || summary == null) return false;
-    if (liveGame != null) await stopLiveActivity();
-    liveGame = game;
-    liveStartedAt = DateTime.now();
-    liveStartScore = summary.score ?? 0;
-    final started = await liveActivities.start(
-      game: game.id,
-      player: account.displayName,
-      unit: game.unit,
-      state: liveState(game)!,
-    );
-    if (!started) {
-      _clearLive();
-      return false;
-    }
-    _saveLive();
+  /// Returns false (and stays off) when iOS doesn't allow it: older than 17.2, or Live
+  /// Activities turned off for PhamiTracker in iOS Settings.
+  Future<bool> setLiveActivityEnabled(bool enabled) async {
+    if (enabled && !(await liveActivities.supported() && await liveActivities.allowed())) return false;
+    liveActivityEnabled = enabled;
+    await _prefs.setBool('live.enabled', enabled);
     notifyListeners();
+    await _syncLive();
     return true;
   }
 
-  Future<void> stopLiveActivity() async {
-    final game = liveGame;
-    final token = _liveToken;
-    await liveActivities.end();
-    final account = game == null ? null : accounts[game];
-    if (account != null && token != null) {
-      unawaited(api.endLiveActivity(account.playerId, token).catchError((Object _) {}));
-    }
-    _clearLive();
-  }
-
-  /// The session so far, for the Live Activity.
-  LiveSessionState? liveState(Game game) {
-    final summary = summaries[game];
-    final since = liveStartedAt;
-    if (summary == null || since == null) return null;
-    final games = [
-      for (final m in summary.matches)
-        if (!m.isAdjustment && !m.time.isBefore(since)) m,
-    ];
-    final wins = games.where((m) => m.won ?? m.delta > 0).length;
-    final score = summary.score ?? 0;
-    return LiveSessionState(
-      score: score,
-      rank: summary.rankLabel ?? summary.rank.name ?? '',
-      sessionDelta: score - (liveStartScore ?? score),
-      games: games.length,
-      wins: wins,
-      losses: games.length - wins,
-      lastDelta: games.isEmpty ? 0 : games.first.delta,
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  void _onLiveToken(String token) {
-    _liveToken = token;
-    _saveLive();
-    final account = liveGame == null ? null : accounts[liveGame!];
-    if (account == null) return;
-    unawaited(api
-        .registerLiveActivity(account.playerId, token: token, sandbox: !kReleaseMode, startScore: liveStartScore)
-        .catchError((Object _) {}));
-  }
-
-  void _saveLive() {
-    _prefs.setString(
-      'live',
-      jsonEncode({
-        'game': liveGame?.id,
-        'startedAt': liveStartedAt?.millisecondsSinceEpoch,
-        'startScore': liveStartScore,
-        'token': ?_liveToken,
-      }),
-    );
-  }
-
-  void _clearLive() {
-    liveGame = null;
-    liveStartedAt = null;
-    liveStartScore = null;
-    _liveToken = null;
-    _prefs.remove('live');
-    notifyListeners();
+  /// Saves the accounts for native code first (it reads them from the App Group), then
+  /// registers or unregisters this phone with the worker.
+  Future<void> _syncLive() async {
+    await _widgets.sync(config: api.config, accounts: accounts, goals: goals, summaries: summaries);
+    await liveActivities.setEnabled(liveActivityEnabled);
   }
 
   /// A Predator goal follows the live cutoff, which moves all split.
@@ -303,11 +216,6 @@ class AppState extends ChangeNotifier {
           summaries[game] = await api.summary(account.playerId, refresh: true);
           errors.remove(game);
           _followPredatorCutoff(game);
-          // Foreground updates; the worker pushes the rest while the app is closed.
-          if (liveGame == game) {
-            final live = liveState(game);
-            if (live != null) unawaited(liveActivities.update(live));
-          }
         } on TrackerApiException catch (e) {
           errors[game] = e.message;
         } finally {
@@ -364,10 +272,10 @@ class AppState extends ChangeNotifier {
     await _prefs.setString('game', game.id);
     notifyListeners();
     await refresh(game);
+    if (liveActivityEnabled) await _syncLive();
   }
 
   Future<void> unlink(Game game) async {
-    if (liveGame == game) await stopLiveActivity();
     final account = accounts.remove(game);
     summaries.remove(game);
     _climb.removeWhere((key, _) => key.$1 == game);
@@ -377,6 +285,7 @@ class AppState extends ChangeNotifier {
     await _prefs.remove('goal.${game.id}');
     notifyListeners();
     _syncWidgets();
+    if (liveActivityEnabled) unawaited(_syncLive());
     if (account != null) {
       // Lets the worker stop polling it. Not fatal if it fails: it goes idle after a few weeks.
       unawaited(api.unlink(account.playerId).catchError((Object _) {}));

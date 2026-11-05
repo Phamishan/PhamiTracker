@@ -1,7 +1,7 @@
 // Polls players' ranks and records every change as a match.
 
 import { fetchApexMaps, fetchApexPlayer, fetchApexPredator, rankedMapAt } from "./apex.js";
-import { pushLiveActivities } from "./live.js";
+import { pushLiveActivities, trackLiveSession } from "./live.js";
 import { fetchValorantHistory, fetchValorantMatchDetails, fetchValorantPlayer } from "./valorant.js";
 import { isApexAdjustment, nextPollDelay } from "./stats.js";
 
@@ -81,7 +81,9 @@ export async function pollPlayer(env, player) {
       error: null,
       error_count: 0,
     };
-    // New games: push the numbers to any Live Activity running for this player.
+    // Live Activity: start one when they start playing, push every new game to it.
+    await trackLiveSession(env, updated, result.state, result.matches, now)
+      .catch((err) => console.error("live session failed", err));
     if (changed) await pushLiveActivities(env, updated, now).catch((err) => console.error("live activity push failed", err));
     return updated;
   } catch (err) {

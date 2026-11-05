@@ -71,12 +71,21 @@ export function mapStats(matches) {
     const name = m.detail?.map;
     if (m.kind !== "match" || !name) continue;
     const entry = maps.get(name) ?? { map: name, matches: 0, delta: 0, wins: 0 };
-    entry.matches += 1;
-    entry.delta += m.delta;
-    if (m.detail?.won ?? (m.delta > 0)) entry.wins += 1;
+    addGame(entry, m);
     maps.set(name, entry);
   }
   return [...maps.values()].sort((a, b) => b.matches - a.matches || b.delta - a.delta);
+}
+
+/** Adds one game to a per-map / per-character row, including kills and deaths when recorded. */
+function addGame(entry, m) {
+  entry.matches += 1;
+  entry.delta += m.delta;
+  if (m.detail?.won ?? (m.delta > 0)) entry.wins += 1;
+  if (Number.isFinite(m.detail?.kills) && Number.isFinite(m.detail?.deaths)) {
+    entry.kills = (entry.kills ?? 0) + m.detail.kills;
+    entry.deaths = (entry.deaths ?? 0) + m.detail.deaths;
+  }
 }
 
 /** RP/RR per legend (Apex) or agent (VALORANT), most played first. */
@@ -86,9 +95,7 @@ export function characterStats(matches) {
     const name = m.detail?.legend ?? m.detail?.agent;
     if (m.kind !== "match" || !name) continue;
     const entry = chars.get(name) ?? { name, matches: 0, delta: 0, wins: 0 };
-    entry.matches += 1;
-    entry.delta += m.delta;
-    if (m.detail?.won ?? (m.delta > 0)) entry.wins += 1;
+    addGame(entry, m);
     chars.set(name, entry);
   }
   return [...chars.values()].sort((a, b) => b.matches - a.matches || b.delta - a.delta);

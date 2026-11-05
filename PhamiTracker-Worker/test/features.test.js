@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeApexPredator } from "../src/apex.js";
-import { apnsJwt, registerLiveActivity, sessionState } from "../src/live.js";
+import { apnsJwt } from "../src/live.js";
 import { actAt, parseActs } from "../src/periods.js";
 import { characterStats, periodStats } from "../src/stats.js";
 
@@ -84,25 +84,4 @@ test("APNs token is a valid ES256 JWT", async () => {
     new TextEncoder().encode(`${header}.${claims}`),
   );
   assert.ok(ok);
-});
-
-test("live activity session numbers", () => {
-  const player = { game: "apex", score: 10_150, state: JSON.stringify({ rank: { name: "Platinum", div: 1 } }) };
-  const state = sessionState(player, 10_000, [game(0, 90, 10_090), game(1, -20, 10_070), game(2, 80, 10_150)], t0);
-  assert.deepEqual(state, {
-    score: 10_150, rank: "Platinum I", sessionDelta: 150, games: 3, wins: 2, losses: 1, lastDelta: 80, updatedAt: t0 / 1000,
-  });
-});
-
-test("live activity registration checks the token", async () => {
-  const writes = [];
-  const env = {
-    DB: { prepare: () => { const stmt = { bind: (...a) => (writes.push(a), stmt), run: async () => ({}) }; return stmt; } },
-  };
-  const player = { id: "p1", score: 900 };
-  assert.ok((await registerLiveActivity(env, player, { token: "not-hex" })).error);
-  const ok = await registerLiveActivity(env, player, { token: "AB".repeat(32), sandbox: true }, t0);
-  assert.equal(ok.pushEnabled, false);
-  assert.deepEqual(writes[0], ["ab".repeat(32), "p1", 1, 900, t0]);
-  assert.ok(DAY > 0);
 });

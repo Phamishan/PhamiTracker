@@ -19,7 +19,7 @@
 🔄 - Apex map rotation with countdown
 🔍 - Search any player, with favourites
 📱 - Home screen & lock screen widgets (RP Today, Rank Goal, Climb, Map Rotation)
-🏝️ - Live Activity (lock screen & Dynamic Island)
+🏝️ - Automatic Live Activity (lock screen & Dynamic Island)
 🆓 - Free
 ⛔ - No ads
 ```
@@ -92,5 +92,8 @@
   - Added recent searches and favourites
   - Added a session recap you can share as an image
   - Added a split and act recap you can share as an image
-  - Added a Live Activity for your session (lock screen and Dynamic Island)
-  - Updated readme
+- 1.0.7 - 05/11/2026
+  - Added an automatic Live Activity (Lock Screen and Dynamic Island)
+  - Added K/D to By Map and By Agent (VALORANT)
+  - Reordered the home screen
+  - New app icon

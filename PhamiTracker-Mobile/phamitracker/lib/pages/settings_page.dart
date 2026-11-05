@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
@@ -22,6 +23,10 @@ class SettingsPage extends StatelessWidget {
           for (final game in Game.values) ...[
             _AccountTile(game: game),
             const SizedBox(height: 10),
+          ],
+          if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+            const SectionTitle('Live Activity'),
+            const _LiveActivityTile(),
           ],
           const SectionTitle('Widgets'),
           const TrackerCard(
@@ -201,6 +206,55 @@ class _Bullet extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Automatic Live Activity: on the lock screen and in the Dynamic Island while you play, started
+/// and ended by the worker so you never have to open the app first.
+class _LiveActivityTile extends StatelessWidget {
+  const _LiveActivityTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final on = state.liveActivityEnabled;
+    return TrackerCard(
+      padding: const EdgeInsets.fromLTRB(18, 14, 10, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.phone_iphone_rounded, color: on ? AppColors.accent : AppColors.textFaint),
+              const SizedBox(width: 14),
+              const Expanded(child: Text('Show sessions automatically', style: TextStyle(fontWeight: FontWeight.w600))),
+              Switch(
+                value: on,
+                activeThumbColor: AppColors.accent,
+                onChanged: (value) async {
+                  final ok = await state.setLiveActivityEnabled(value);
+                  if (!ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Needs iOS 17.2 or newer, with Live Activities allowed for PhamiTracker in iOS Settings.'),
+                    ));
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              'Your session appears on the lock screen and in the Dynamic Island when you load into an Apex '
+              'match, or after your first VALORANT ranked game, without opening the app. It updates after '
+              'every game and ends 45 minutes after your last one. Turning this off stops it completely.',
+              style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

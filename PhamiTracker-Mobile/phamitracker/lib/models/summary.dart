@@ -191,12 +191,18 @@ class DayPoint {
 }
 
 class MapStat {
-  const MapStat({required this.map, required this.matches, required this.delta, required this.wins});
+  const MapStat({required this.map, required this.matches, required this.delta, required this.wins, this.kills, this.deaths});
 
   final String map;
   final int matches;
   final int delta;
   final int wins;
+
+  /// VALORANT: kills and deaths over the games that recorded them.
+  final int? kills;
+  final int? deaths;
+
+  double? get kd => kills == null || deaths == null ? null : kills! / (deaths! == 0 ? 1 : deaths!);
 
   factory MapStat.fromJson(Map<String, dynamic> json) => MapStat(
         // Maps send `map`; legends/agents send `name`.
@@ -204,6 +210,8 @@ class MapStat {
         matches: _int(json['matches']) ?? 0,
         delta: _int(json['delta']) ?? 0,
         wins: _int(json['wins']) ?? 0,
+        kills: _int(json['kills']),
+        deaths: _int(json['deaths']),
       );
 }
 

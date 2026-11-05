@@ -59,27 +59,19 @@ Map<String, dynamic> _summary({int score = 16_500, int? cutoff = 24_000, List<Ma
     };
 
 class _FakeLive extends LiveActivityService {
-  final updates = <LiveSessionState>[];
-  bool started = false;
-  bool ended = false;
+  _FakeLive({this.allow = true});
+
+  final bool allow;
+  final calls = <bool>[];
 
   @override
-  bool get supported => true;
+  Future<bool> supported() async => allow;
 
   @override
-  Future<bool> start({required String game, required String player, required String unit, required LiveSessionState state}) async {
-    started = true;
-    return true;
-  }
+  Future<bool> allowed() async => allow;
 
   @override
-  Future<void> update(LiveSessionState state) async => updates.add(state);
-
-  @override
-  Future<void> end() async => ended = true;
-
-  @override
-  Future<bool> isRunning() async => started && !ended;
+  Future<void> setEnabled(bool enabled) async => calls.add(enabled);
 }
 
 Future<AppState> _state(http.Client client, {Map<String, Object> prefs = const {}, LiveActivityService? live}) async {
@@ -169,40 +161,37 @@ void main() {
     expect(reloaded.favorites, isEmpty);
   });
 
-  test('live activity: session numbers, token registration and stop', () async {
-    final requests = <String>[];
-    var score = 16_500;
-    final matches = <Map<String, Object?>>[];
+  test('live activity is a setting: on, re-registered after linking, fully off', () async {
     final live = _FakeLive();
     final state = await _state(
-      MockClient((r) async {
-        requests.add('${r.method} ${r.url.path} ${r.body}');
-        return http.Response(jsonEncode(_summary(score: score, matches: matches)), 200);
-      }),
+      MockClient((r) async => r.method == 'POST'
+          ? http.Response(jsonEncode({'player': {'id': 'valorant-1', 'game': 'valorant', 'name': 'Phami', 'tag': 'EUW'}}), 201)
+          : http.Response(jsonEncode(_summary()), 200)),
       prefs: _linkedApex,
       live: live,
     );
-    await state.refresh();
-    expect(await state.startLiveActivity(Game.apex), isTrue);
-    expect(state.liveGame, Game.apex);
+    expect(state.liveActivityEnabled, isFalse);
+    expect(await state.setLiveActivityEnabled(true), isTrue);
+    expect(live.calls, [true]);
 
-    live.onToken!('ab' * 32);
-    await Future<void>.delayed(Duration.zero);
-    expect(requests.last, contains('POST /v1/players/apex-1/live-activity'));
-    expect(requests.last, contains('"startScore":16500'));
+    await state.link(game: Game.valorant, name: 'Phami', tag: 'EUW', platform: 'pc', region: 'eu');
+    expect(live.calls, [true, true]); // the new player is registered too
 
-    score = 16_590;
-    matches.add({'ts': DateTime.now().millisecondsSinceEpoch + 1000, 'delta': 90, 'scoreAfter': 16_590, 'kind': 'match'});
-    await state.refresh();
-    expect(live.updates.last.sessionDelta, 90);
-    expect(live.updates.last.games, 1);
-    expect(live.updates.last.wins, 1);
+    expect(await state.setLiveActivityEnabled(false), isTrue);
+    expect(live.calls.last, isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('live.enabled'), isFalse);
 
-    await state.stopLiveActivity();
-    await Future<void>.delayed(Duration.zero);
-    expect(live.ended, isTrue);
-    expect(state.liveGame, isNull);
-    expect(requests.last, startsWith('DELETE /v1/players/apex-1/live-activity/${'ab' * 32}'));
+    // Not allowed by iOS: stays off and says so.
+    final blocked = await _state(MockClient((r) async => http.Response('{}', 404)), live: _FakeLive(allow: false));
+    expect(await blocked.setLiveActivityEnabled(true), isFalse);
+    expect(blocked.liveActivityEnabled, isFalse);
+  });
+
+  test('K/D per map and agent', () {
+    const jett = MapStat(map: 'Jett', matches: 2, delta: 42, wins: 2, kills: 45, deaths: 22);
+    expect(jett.kd!.toStringAsFixed(2), '2.05');
+    expect(const MapStat(map: 'Olympus', matches: 1, delta: 50, wins: 1).kd, isNull);
   });
 
   testWidgets('split recap, records and session cards render', (tester) async {
