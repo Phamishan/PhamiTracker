@@ -216,3 +216,27 @@ test("summary includes split recap, legends and survives missing season/predator
   assert.equal(res.predator, null);
   assert.equal(res.previousSplit, null);
 });
+
+test("cron housekeeping runs every 15 minutes, session check every minute", async () => {
+  const { isTidyMinute } = await import("../src/index.js");
+  const run = async (minute) => {
+    const sql = [];
+    const DB = {
+      prepare: (q) => {
+        const stmt = { bind: () => stmt, first: async () => null, all: async () => ({ results: [] }), run: async () => (sql.push(q), {}) };
+        if (/^SELECT/.test(q)) sql.push(q);
+        return stmt;
+      },
+    };
+    const waits = [];
+    await worker.scheduled({ scheduledTime: Date.UTC(2026, 10, 6, 18, minute) }, { DB }, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+    return sql;
+  };
+  const quiet = await run(7);
+  assert.ok(quiet.some((q) => q.includes("FROM live_sessions")));
+  assert.ok(!quiet.some((q) => q.startsWith("DELETE")));
+  const tidy = await run(15);
+  assert.equal(tidy.filter((q) => q.startsWith("DELETE")).length, 2);
+  assert.deepEqual([0, 14, 15, 30, 45, 59].map((m) => isTidyMinute(Date.UTC(2026, 10, 6, 18, m))), [true, false, true, true, true, false]);
+});

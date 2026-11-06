@@ -66,17 +66,22 @@ export default {
 
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(pollDue(env, controller.scheduledTime).then((counts) => console.log("polled", counts)));
-    ctx.waitUntil(
-      env.DB.prepare("DELETE FROM cache WHERE (key LIKE 'search:%' OR key LIKE 'match:%') AND expires_at < ?")
-        .bind(controller.scheduledTime)
-        .run(),
-    );
+    // Every minute: Live Activity sessions should end on time (it's only a read when none are idle).
     ctx.waitUntil(endIdleSessions(env, controller.scheduledTime).catch((err) => console.error("ending sessions failed", err)));
-    ctx.waitUntil(
-      env.DB.prepare("DELETE FROM live_activities WHERE started_at < ?")
-        .bind(controller.scheduledTime - LIVE_ACTIVITY_MAX_MS)
-        .run(),
-    );
+    // Every 15 minutes: housekeeping nobody sees. Expired searches are never served (reads check
+    // the expiry) and activities older than 12 hours are never pushed to.
+    if (isTidyMinute(controller.scheduledTime)) {
+      ctx.waitUntil(
+        env.DB.prepare("DELETE FROM cache WHERE (key LIKE 'search:%' OR key LIKE 'match:%') AND expires_at < ?")
+          .bind(controller.scheduledTime)
+          .run(),
+      );
+      ctx.waitUntil(
+        env.DB.prepare("DELETE FROM live_activities WHERE started_at < ?")
+          .bind(controller.scheduledTime - LIVE_ACTIVITY_MAX_MS)
+          .run(),
+      );
+    }
   },
 };
 
@@ -476,3 +481,6 @@ function publicPlayer(row, state) {
 }
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+/** The cron runs every minute; housekeeping only on :00, :15, :30 and :45. */
+export const isTidyMinute = (time) => new Date(time).getUTCMinutes() % 15 === 0;

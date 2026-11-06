@@ -22,7 +22,7 @@ let appGroup = "group.phamishan.phamitracker"
 private let surface = Color(hex: 0x2A2724)
 private let surfaceHigh = Color(hex: 0x35312C)
 private let surfaceLow = Color(hex: 0x201E1B)
-private let border = Color.white.opacity(0.08)
+private let borderColor = Color.white.opacity(0.08)
 private let textDim = Color(hex: 0xCBBFA8)
 private let textFaint = Color(hex: 0x8C8273)
 private let accent = Color(hex: 0xE0604E)
@@ -1311,7 +1311,7 @@ struct ClimbView: View {
     let matches = Array((entry.snapshot?.matches ?? []).prefix(5))
     return VStack(spacing: 5) {
       ForEach(Array(matches.enumerated()), id: \.offset) { i, match in
-        if i > 0 { Rectangle().fill(border).frame(height: 1) }
+        if i > 0 { Rectangle().fill(borderColor).frame(height: 1) }
         MatchRow(match: match, unit: entry.game.unit)
       }
     }
@@ -1392,7 +1392,7 @@ struct MapRotationView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(.black.opacity(0.35), in: Capsule())
-            .overlay(Capsule().stroke(border))
+            .overlay(Capsule().stroke(borderColor))
           Spacer(minLength: 4)
           if family == .systemMedium, let next = entry.next {
             MonoLabel("Next: \(next)", color: .white, size: 9)
