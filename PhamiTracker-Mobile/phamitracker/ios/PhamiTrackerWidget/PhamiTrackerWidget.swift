@@ -15,12 +15,14 @@ import WidgetKit
 
 let appGroup = "group.phamishan.phamitracker"
 
-// MARK: - Style (matches lib/theme/app_theme.dart)
+// MARK: - Style (matches lib/theme/app_theme.dart and lib/widgets/common.dart)
 
-// PhamiJam's family look: warm charcoal, coral accent, PhamiJam gold for goals.
-private let cardTop = Color(hex: 0x2A2724)
-private let cardBottom = Color(hex: 0x24221F)
-private let track = Color(hex: 0x35312C)
+// PhamiJam's family look: flat warm-charcoal cards, coral accent, PhamiJam gold for goals,
+// green/red for results.
+private let surface = Color(hex: 0x2A2724)
+private let surfaceHigh = Color(hex: 0x35312C)
+private let surfaceLow = Color(hex: 0x201E1B)
+private let border = Color.white.opacity(0.08)
 private let textDim = Color(hex: 0xCBBFA8)
 private let textFaint = Color(hex: 0x8C8273)
 private let accent = Color(hex: 0xE0604E)
@@ -40,12 +42,12 @@ private let danishClockFormat: DateFormatter = {
 
 private func danishClock(_ date: Date) -> String { danishClockFormat.string(from: date) }
 
-/// "Today 13:48", "Yesterday 21:02", "Sun 1 Nov".
+/// "Today, 13:48", "Yesterday, 21:02", "Sun 1 Nov, 18:30" (matchDate in match_list.dart).
 private func matchDate(_ date: Date) -> String {
   let time = danishClock(date)
-  if Calendar.current.isDateInToday(date) { return "Today \(time)" }
-  if Calendar.current.isDateInYesterday(date) { return "Yesterday \(time)" }
-  return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+  if Calendar.current.isDateInToday(date) { return "Today, \(time)" }
+  if Calendar.current.isDateInYesterday(date) { return "Yesterday, \(time)" }
+  return "\(date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))), \(time)"
 }
 
 private func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
@@ -84,8 +86,83 @@ private struct MonoLabel: View {
   }
 }
 
-private var cardBackground: some View {
-  LinearGradient(colors: [cardTop, cardBottom], startPoint: .top, endPoint: .bottom)
+/// Flat, filled card (TrackerCard in common.dart).
+private var cardBackground: some View { surface }
+
+/// `+24 RP` in green / `-35 RP` in red on a tinted chip (DeltaChip in common.dart).
+private struct DeltaChip: View {
+  let delta: Int
+  var unit: String? = nil
+  var size: CGFloat = 14
+
+  var body: some View {
+    let color = deltaColor(delta)
+    Text(unit.map { "\(signed(delta)) \($0)" } ?? signed(delta))
+      .font(display(size))
+      .foregroundStyle(color)
+      .lineLimit(1)
+      .padding(.horizontal, size * 0.55)
+      .padding(.vertical, size * 0.2)
+      .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+  }
+}
+
+/// A value over a small faint label on a darker tile (the stat blocks under the rank in the app).
+private struct StatTile: View {
+  let label: String
+  let value: Text
+  var size: CGFloat = 16
+
+  var body: some View {
+    VStack(spacing: 2) {
+      value.font(display(size)).lineLimit(1).minimumScaleFactor(0.6)
+      MonoLabel(label, color: textFaint, size: 8)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 7)
+    .padding(.horizontal, 4)
+    .background(surfaceLow, in: RoundedRectangle(cornerRadius: 12))
+  }
+}
+
+/// `4 / 2` with the wins green and the losses red.
+private func winLoss(_ wins: Int, _ losses: Int) -> Text {
+  Text("\(wins)").foregroundColor(gain) + Text(" / ").foregroundColor(textFaint) + Text("\(losses)").foregroundColor(loss)
+}
+
+/// Capsule bar on a dark track (ProgressBar in common.dart).
+private struct ProgressBar: View {
+  let value: Double
+  var color: Color = goalColor
+  var height: CGFloat = 8
+
+  var body: some View {
+    GeometryReader { geo in
+      let v = min(1, max(0, value))
+      ZStack(alignment: .leading) {
+        Capsule().fill(surfaceHigh)
+        if v > 0 { Capsule().fill(color).frame(width: max(height, geo.size.width * v)) }
+      }
+    }
+    .frame(height: height)
+  }
+}
+
+/// `● IN MATCH` / `● ONLINE` in green, `● TRACKING` when idle (the status pill on the rank card).
+private struct StatusPill: View {
+  let status: Snapshot.Status?
+
+  var body: some View {
+    let (text, live) = status?.inGame == true ? ("In match", true) : status?.online == true ? ("Online", true) : ("Tracking", false)
+    let color = live ? gain : textFaint
+    HStack(spacing: 5) {
+      Circle().fill(color).frame(width: 5, height: 5)
+      MonoLabel(text, color: color, size: 8)
+    }
+    .padding(.horizontal, 7)
+    .padding(.vertical, 3)
+    .background(surfaceLow, in: Capsule())
+  }
 }
 
 // MARK: - Configuration
@@ -237,6 +314,7 @@ struct Snapshot: Codable {
     let wins: Int
     let losses: Int
     var best: Int? = nil
+    var worst: Int? = nil
     var series: [Int]? = nil
   }
   struct Status: Codable { let online: Bool?; let inGame: Bool? }
@@ -325,7 +403,7 @@ struct TrackerEntry: TimelineEntry {
         score: base + steps.last!,
         rankLabel: game == .apex ? "Diamond III" : "Diamond 1",
         rank: Snapshot.Rank(name: game == .apex ? "Diamond" : "Diamond 1", rr: 42),
-        today: Snapshot.Today(delta: 359, matches: 6, wins: 4, losses: 2, best: 196, series: [40, 25, 120, 95, 160, 359]),
+        today: Snapshot.Today(delta: 359, matches: 6, wins: 4, losses: 2, best: 196, worst: -26, series: [40, 25, 120, 95, 160, 359]),
         status: Snapshot.Status(online: true, inGame: false),
         polledAt: now,
         history: steps.enumerated().map { Snapshot.Day(day: "d\($0.offset)", score: base + $0.element, delta: 0) },
@@ -644,7 +722,7 @@ struct SessionLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: PhamiSessionAttributes.self) { context in
       SessionLockScreen(context: context)
-        .activityBackgroundTint(cardTop)
+        .activityBackgroundTint(surface)
         .activitySystemActionForegroundColor(.white)
     } dynamicIsland: { context in
       let game = TrackedGame(rawValue: context.attributes.game) ?? .apex
@@ -714,19 +792,16 @@ private struct SessionFacts: View {
   let unit: String
 
   var body: some View {
-    HStack(spacing: 14) {
-      fact("GAMES", Text("\(state.games)"))
-      fact("W / L", Text("\(state.wins)").foregroundColor(gain) + Text(" / ").foregroundColor(textFaint) + Text("\(state.losses)").foregroundColor(loss))
-      fact("LAST", Text(state.games == 0 ? "—" : signed(state.lastDelta)).foregroundColor(state.games == 0 ? .white : deltaColor(state.lastDelta)))
-      Spacer()
+    HStack(spacing: 6) {
+      StatTile(label: "Games", value: Text("\(state.games)"), size: 15)
+      StatTile(label: "W / L", value: winLoss(state.wins, state.losses), size: 15)
+      StatTile(
+        label: "Last",
+        value: Text(state.games == 0 ? "—" : signed(state.lastDelta))
+          .foregroundColor(state.games == 0 ? .white : deltaColor(state.lastDelta)),
+        size: 15)
     }
-  }
-
-  private func fact(_ label: String, _ value: Text) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-      value.font(display(15))
-      Text(label).font(grotesk(8, .medium)).tracking(1.2).foregroundStyle(textFaint)
-    }
+    .foregroundStyle(.white)
   }
 }
 
@@ -737,10 +812,10 @@ struct NotLinkedView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      GameLogo(game: game, size: 22, color: game.accent)
+      GameLogo(game: game, size: 26, color: game.accent)
       Spacer(minLength: 0)
-      Text("LINK \(game == .apex ? "APEX" : "VALORANT")").font(display(22))
-      Text("Open PhamiTracker to start tracking.").font(grotesk(11)).foregroundStyle(textDim)
+      Text("TRACK YOUR \(game.title) RANK").font(display(18)).lineLimit(2).minimumScaleFactor(0.7)
+      Text("Open PhamiTracker to link your account.").font(grotesk(11)).foregroundStyle(textDim)
     }
     .foregroundStyle(.white)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -762,7 +837,7 @@ struct GameLogo: View {
   }
 }
 
-/// Rank art if we have it, otherwise a ring with the rank's initial.
+/// Rank art if we have it, otherwise a ring with the rank's initial (RankBadge in rank_hero.dart).
 struct RankIcon: View {
   let image: UIImage?
   let name: String
@@ -772,10 +847,49 @@ struct RankIcon: View {
     if let image {
       Image(uiImage: image).resizable().scaledToFit().frame(width: size, height: size)
     } else {
-      Text(String(name.prefix(1)).uppercased())
+      Text(name.isEmpty ? "?" : String(name.prefix(1)).uppercased())
         .font(display(size * 0.5))
         .frame(width: size, height: size)
-        .overlay(Circle().stroke(textDim, lineWidth: 1.5))
+        .background(Circle().fill(surfaceLow))
+        .overlay(Circle().stroke(textDim.opacity(0.8), lineWidth: 1.5))
+    }
+  }
+}
+
+/// The rank art sitting in a darker circle, like the badge at the top of the rank card.
+struct RankBadge: View {
+  let image: UIImage?
+  let name: String
+  var size: CGFloat = 30
+
+  var body: some View {
+    RankIcon(image: image, name: name, size: size)
+      .padding(size * 0.14)
+      .background(Circle().fill(surfaceLow))
+  }
+}
+
+/// One rank change: a tinted arrow tile, legend/agent · map, when, and the delta (_MatchTile in match_list.dart).
+private struct MatchRow: View {
+  let match: Snapshot.Match
+  let unit: String
+
+  var body: some View {
+    let adjust = match.kind == "adjust"
+    let color = adjust ? textDim : deltaColor(match.delta)
+    let title = adjust ? "Rank adjustment" : [match.legend ?? match.agent, match.map].compactMap { $0 }.joined(separator: " · ")
+    HStack(spacing: 10) {
+      Image(systemName: adjust ? "slider.horizontal.3" : match.delta >= 0 ? "arrow.up" : "arrow.down")
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(color)
+        .frame(width: 26, height: 26)
+        .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+      VStack(alignment: .leading, spacing: 2) {
+        Text((title.isEmpty ? "Ranked match" : title).uppercased()).font(display(13)).lineLimit(1)
+        MonoLabel(matchDate(Date(timeIntervalSince1970: match.ts / 1000)), size: 8)
+      }
+      Spacer(minLength: 6)
+      Text("\(signed(match.delta)) \(unit)").font(display(14)).foregroundStyle(color).lineLimit(1)
     }
   }
 }
@@ -803,35 +917,6 @@ struct Sparkline: View {
     .chartXAxis(.hidden)
     .chartYAxis(.hidden)
     .chartYScale(domain: (points.min() ?? 0)...max((points.max() ?? 1), (points.min() ?? 0) + 1))
-  }
-}
-
-/// Dial with tick marks and a progress arc.
-struct GaugeDial: View {
-  let progress: Double
-  var color: Color = goalColor
-
-  var body: some View {
-    GeometryReader { geo in
-      let r = min(geo.size.width, geo.size.height) / 2
-      ZStack {
-        ForEach(0..<60, id: \.self) { i in
-          let major = i % 5 == 0
-          Capsule()
-            .fill(Double(i) / 60 < progress ? color.opacity(0.75) : .white.opacity(major ? 0.22 : 0.12))
-            .frame(width: major ? 2 : 1.2, height: major ? 8 : 5)
-            .offset(y: -r + (major ? 5 : 3.5))
-            .rotationEffect(.degrees(Double(i) * 6))
-        }
-        Circle().stroke(track, lineWidth: 5).padding(16)
-        Circle()
-          .trim(from: 0, to: max(0.001, progress))
-          .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-          .rotationEffect(.degrees(-90))
-          .padding(16)
-      }
-      .frame(width: geo.size.width, height: geo.size.height)
-    }
   }
 }
 
@@ -871,7 +956,7 @@ struct RPTodayView: View {
       if entry.state == .notLinked {
         NotLinkedView(game: entry.game)
       } else if family == .systemMedium {
-        HStack(spacing: 18) {
+        HStack(spacing: 16) {
           todayBlock
           rankBlock
         }
@@ -882,49 +967,68 @@ struct RPTodayView: View {
     }
   }
 
+  /// Today's session (TodayTile in stat_tiles.dart): net points, best and worst game, running total.
   var todayBlock: some View {
     VStack(alignment: .leading, spacing: 2) {
       HStack(spacing: 6) {
         GameLogo(game: entry.game, size: 12, color: entry.game.accent)
-        MonoLabel("Today · \(today.matches) games", color: textFaint, size: 10)
+        MonoLabel("Today · \(today.matches) games", size: 9)
       }
       Spacer(minLength: 2)
       HStack(alignment: .firstTextBaseline, spacing: 4) {
         Text(signed(today.delta))
-          .font(display(50, .bold))
+          .font(display(40))
           .foregroundStyle(deltaColor(today.delta))
           .minimumScaleFactor(0.5)
           .lineLimit(1)
           .contentTransition(.numericText())
-        Text(entry.game.unit).font(display(16, .bold)).foregroundStyle(textDim)
+        Text(entry.game.unit).font(display(14)).foregroundStyle(textDim)
       }
-      Text(today.best.map { "Net \(entry.game.unit) · best \(signed($0))" } ?? "No games yet")
-        .font(grotesk(12))
-        .foregroundStyle(textDim)
+      if let best = today.best {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+          MonoLabel("Best", color: textFaint, size: 8)
+          Text(signed(best)).font(display(12)).foregroundStyle(deltaColor(best))
+          if let worst = today.worst {
+            MonoLabel("Worst", color: textFaint, size: 8).padding(.leading, 6)
+            Text(signed(worst)).font(display(12)).foregroundStyle(deltaColor(worst))
+          }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+      } else {
+        Text("No games today yet.").font(grotesk(11)).foregroundStyle(textDim)
+      }
       Spacer(minLength: 4)
       if let series = today.series, !series.isEmpty {
-        Sparkline(values: series, color: entry.game.accent).frame(height: 36)
+        Sparkline(values: series, color: deltaColor(today.delta)).frame(height: 30)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
+  /// The rank card in miniature: badge, rank, score, then games and W / L tiles.
   var rankBlock: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      MonoLabel("Current rank", color: textFaint, size: 10)
-      Spacer(minLength: 0)
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        MonoLabel("Current rank", size: 9)
+        Spacer(minLength: 4)
+        StatusPill(status: entry.snapshot?.status)
+      }
       HStack(spacing: 8) {
-        RankIcon(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 30)
-        Text((entry.snapshot?.rankLabel ?? "—").uppercased()).font(display(20)).lineLimit(1).minimumScaleFactor(0.6)
-      }
-      if let score = entry.snapshot?.score {
-        Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
-          .font(display(22, .bold))
+        RankBadge(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 28)
+        VStack(alignment: .leading, spacing: 1) {
+          Text((entry.snapshot?.rankLabel ?? "—").uppercased()).font(display(17)).lineLimit(1).minimumScaleFactor(0.6)
+          if let score = entry.snapshot?.score {
+            Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
+              .font(grotesk(12).monospacedDigit())
+              .foregroundStyle(textDim)
+          }
+        }
       }
       Spacer(minLength: 0)
-      HStack(spacing: 10) {
-        Text("\(today.wins)W").font(display(16, .bold)).foregroundStyle(gain)
-        Text("\(today.losses)L").font(display(16, .bold)).foregroundStyle(loss)
+      HStack(spacing: 6) {
+        StatTile(label: "Games", value: Text("\(today.matches)"))
+        StatTile(label: "W / L", value: winLoss(today.wins, today.losses))
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -973,59 +1077,66 @@ struct RankGoalView: View {
     }
   }
 
-  /// Wingman-style: current rank | rank goal.
+  /// The rank goal card (GoalCard in rank_hero.dart), with today's rank above it.
   var medium: some View {
-    HStack(alignment: .top, spacing: 16) {
-      VStack(alignment: .leading, spacing: 6) {
-        HStack(spacing: 6) {
-          Image(systemName: "shield.fill").font(grotesk(10)).foregroundStyle(textDim)
-          MonoLabel("Current rank", size: 10)
-        }
-        HStack(spacing: 8) {
-          RankIcon(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 30)
-          Text((entry.snapshot?.rankLabel ?? "—").uppercased()).font(display(21)).lineLimit(1).minimumScaleFactor(0.6)
-        }
-        Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
-          .font(display(24, .bold))
-        Spacer(minLength: 0)
-        MonoLabel("Today", size: 10)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 6) {
+        GameLogo(game: entry.game, size: 12, color: entry.game.accent)
+        MonoLabel(
+          [entry.snapshot?.rankLabel, entry.snapshot?.score.map { "\($0.formatted()) \(entry.game.unit)" }]
+            .compactMap { $0 }.joined(separator: " · "),
+          color: textFaint, size: 9)
+        Spacer(minLength: 4)
         let today = entry.snapshot?.todayIfCurrent ?? .init(delta: 0, matches: 0, wins: 0, losses: 0)
-        Text("\(signed(today.delta)) \(entry.game.unit) · \(today.matches) games")
-          .font(display(15, .bold))
-          .foregroundStyle(deltaColor(today.delta))
-          .lineLimit(1)
+        if today.matches > 0 { DeltaChip(delta: today.delta, unit: entry.game.unit, size: 11) }
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-
-      VStack(alignment: .leading, spacing: 6) {
-        HStack(spacing: 6) {
-          Image(systemName: "scope").font(grotesk(10)).foregroundStyle(textDim)
-          MonoLabel("Rank goal", size: 10)
-        }
-        if let goal = entry.goal {
-          HStack(spacing: 8) {
-            RankIcon(image: entry.goalImage, name: goal.label, size: 30)
+      Spacer(minLength: 6)
+      if let goal = entry.goal {
+        HStack(spacing: 12) {
+          RankIcon(image: entry.goalImage, name: goal.label, size: 44)
+          VStack(alignment: .leading, spacing: 3) {
+            MonoLabel("Rank goal", size: 10)
             Text(goal.label.uppercased()).font(display(21)).foregroundStyle(goalSoft).lineLimit(1).minimumScaleFactor(0.6)
           }
-          HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(remaining == 0 ? "DONE" : remaining.formatted()).font(display(24, .bold))
-            Text("\(entry.game.unit) to go").font(grotesk(11)).foregroundStyle(textDim).lineLimit(1)
+          Spacer(minLength: 6)
+          if remaining == 0 {
+            Text("REACHED").font(display(18)).foregroundStyle(gain)
+          } else {
+            VStack(alignment: .trailing, spacing: 1) {
+              Text(remaining.formatted()).font(display(24)).lineLimit(1)
+              MonoLabel("\(entry.game.unit) to go", color: textFaint, size: 8)
+            }
           }
-          Spacer(minLength: 0)
+        }
+        Spacer(minLength: 8)
+        ProgressBar(value: progress, height: 10)
+        HStack {
+          Text(paceText).font(grotesk(11)).foregroundStyle(textDim).lineLimit(1).minimumScaleFactor(0.8)
+          Spacer(minLength: 8)
           Text("\(score.formatted()) / \(goal.targetScore.formatted())")
             .font(grotesk(10).monospacedDigit())
-            .foregroundStyle(textDim)
+            .foregroundStyle(textFaint)
             .lineLimit(1)
-            .minimumScaleFactor(0.7)
-          ProgressView(value: progress).tint(goalColor)
-          Text(paceText).font(grotesk(11)).foregroundStyle(textDim).lineLimit(1)
-        } else {
-          Text("SET A GOAL").font(display(21)).foregroundStyle(goalSoft)
-          Spacer(minLength: 0)
-          Text("Open the app and tap Rank goal.").font(grotesk(11)).foregroundStyle(textDim)
         }
+        .padding(.top, 7)
+      } else {
+        setGoal(iconSize: 44, titleSize: 18)
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  /// Gold flag in a soft gold circle, like the empty goal card in the app.
+  func setGoal(iconSize: CGFloat, titleSize: CGFloat) -> some View {
+    HStack(spacing: 12) {
+      Image(systemName: "flag.fill")
+        .font(.system(size: iconSize * 0.4))
+        .foregroundStyle(goalColor)
+        .frame(width: iconSize, height: iconSize)
+        .background(Circle().fill(goalColor.opacity(0.16)))
+      VStack(alignment: .leading, spacing: 3) {
+        Text("SET A RANK GOAL").font(display(titleSize)).foregroundStyle(goalSoft).lineLimit(1).minimumScaleFactor(0.6)
+        Text("Open the app to pick one.").font(grotesk(11)).foregroundStyle(textDim).lineLimit(1)
+      }
     }
   }
 
@@ -1045,29 +1156,47 @@ struct RankGoalView: View {
   }
 
   var small: some View {
-    VStack(spacing: 4) {
-      HStack {
-        MonoLabel("Rank goal", color: textFaint, size: 10)
-        Spacer(minLength: 0)
-        Text("\(Int(progress * 100))%").font(display(14, .bold)).foregroundStyle(goalColor)
-      }
+    VStack(alignment: .leading, spacing: 0) {
       if let goal = entry.goal {
-        ZStack {
-          GaugeDial(progress: progress)
-          VStack(spacing: 0) {
-            Text(remaining == 0 ? "✓" : remaining.formatted()).font(display(24)).minimumScaleFactor(0.5).lineLimit(1)
-            Text("\(entry.game.unit) to go").font(grotesk(7, .medium).monospacedDigit()).foregroundStyle(textDim)
+        HStack(spacing: 8) {
+          RankIcon(image: entry.goalImage, name: goal.label, size: 34)
+          VStack(alignment: .leading, spacing: 2) {
+            MonoLabel("Rank goal", size: 9)
+            Text(goal.label.uppercased()).font(display(15)).foregroundStyle(goalSoft).lineLimit(1).minimumScaleFactor(0.6)
           }
-          .padding(.horizontal, 26)
         }
-        Text(goal.label.uppercased()).font(display(14)).foregroundStyle(goalSoft).lineLimit(1)
+        Spacer(minLength: 4)
+        if remaining == 0 {
+          Text("REACHED").font(display(26)).foregroundStyle(gain)
+        } else {
+          Text(remaining.formatted()).font(display(30)).lineLimit(1).minimumScaleFactor(0.5)
+          MonoLabel("\(entry.game.unit) to go", color: textFaint, size: 8)
+        }
+        Spacer(minLength: 6)
+        ProgressBar(value: progress, height: 8)
+        HStack {
+          Text("\(Int(progress * 100))%").font(display(11)).foregroundStyle(goalColor)
+          Spacer(minLength: 4)
+          Text("\(score.formatted()) / \(goal.targetScore.formatted())")
+            .font(grotesk(9).monospacedDigit())
+            .foregroundStyle(textFaint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .padding(.top, 6)
       } else {
-        Spacer()
-        Text("SET A GOAL").font(display(20)).foregroundStyle(goalSoft)
-        Text("In the app").font(grotesk(11)).foregroundStyle(textDim)
-        Spacer()
+        Spacer(minLength: 0)
+        Image(systemName: "flag.fill")
+          .font(.system(size: 16))
+          .foregroundStyle(goalColor)
+          .frame(width: 40, height: 40)
+          .background(Circle().fill(goalColor.opacity(0.16)))
+        Spacer(minLength: 0)
+        Text("SET A RANK GOAL").font(display(17)).foregroundStyle(goalSoft).lineLimit(2)
+        Text("Open the app to pick one.").font(grotesk(11)).foregroundStyle(textDim)
       }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
@@ -1105,7 +1234,7 @@ struct ClimbChart: View {
       }
       if goalVisible, let goal {
         RuleMark(y: .value("Goal", goal))
-          .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+          .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
           .foregroundStyle(goalColor.opacity(0.8))
       }
     }
@@ -1144,24 +1273,22 @@ struct ClimbView: View {
       NotLinkedView(game: entry.game)
     } else if (entry.snapshot?.chartPoints.count ?? 0) < 2 {
       VStack(alignment: .leading) {
-        MonoLabel("Climb · \(entry.climbRange.title)", color: textFaint, size: 10)
+        MonoLabel("Climb · \(entry.climbRange.title)", size: 9)
         Spacer()
         Text("Your climb shows up here after a few games.").font(grotesk(12)).foregroundStyle(textDim)
       }
       .foregroundStyle(.white)
     } else {
       VStack(alignment: .leading, spacing: 6) {
-        HStack {
+        HStack(spacing: 6) {
           GameLogo(game: entry.game, size: 12, color: entry.game.accent)
-          MonoLabel("Climb · \(entry.climbRange.title)", color: textFaint, size: 10)
+          MonoLabel(family == .systemSmall ? entry.climbRange.short : "Climb · \(entry.climbRange.title)", size: 9)
           Spacer(minLength: 4)
-          Text("\(signed(weekDelta)) \(entry.game.unit)")
-            .font(display(15, .bold))
-            .foregroundStyle(deltaColor(weekDelta))
+          DeltaChip(delta: weekDelta, unit: family == .systemSmall ? nil : entry.game.unit, size: 12)
         }
         HStack(spacing: 8) {
           if family != .systemSmall {
-            RankIcon(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 26)
+            RankBadge(image: entry.rankImage, name: entry.snapshot?.rank?.name ?? "", size: 22)
           }
           Text((entry.snapshot?.rankLabel ?? "—").uppercased())
             .font(display(family == .systemSmall ? 18 : 22))
@@ -1181,24 +1308,11 @@ struct ClimbView: View {
   }
 
   var recentMatches: some View {
-    VStack(spacing: 8) {
-      ForEach(Array((entry.snapshot?.matches ?? []).prefix(5).enumerated()), id: \.offset) { _, match in
-        let title = [match.legend ?? match.agent, match.map].compactMap { $0 }.joined(separator: " · ")
-        let color = match.kind == "adjust" ? textDim : deltaColor(match.delta)
-        HStack(spacing: 10) {
-          RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 3, height: 22)
-          Text((title.isEmpty ? "Ranked match" : title).uppercased())
-            .font(display(14, .bold))
-            .lineLimit(1)
-          Spacer()
-          Text(matchDate(Date(timeIntervalSince1970: match.ts / 1000)))
-            .font(grotesk(10).monospacedDigit())
-            .foregroundStyle(textDim)
-          Text(signed(match.delta))
-            .font(display(15, .bold))
-            .foregroundStyle(color)
-            .frame(width: 44, alignment: .trailing)
-        }
+    let matches = Array((entry.snapshot?.matches ?? []).prefix(5))
+    return VStack(spacing: 5) {
+      ForEach(Array(matches.enumerated()), id: \.offset) { i, match in
+        if i > 0 { Rectangle().fill(border).frame(height: 1) }
+        MatchRow(match: match, unit: entry.game.unit)
       }
     }
     .padding(.top, 6)
@@ -1219,7 +1333,10 @@ struct MapRotationView: View {
     if let art = entry.art, family == .systemSmall || family == .systemMedium {
       ZStack {
         Image(uiImage: art).resizable().scaledToFill()
-        LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+        // Darken toward the bottom so the text always reads (RotationCard in match_list.dart).
+        LinearGradient(
+          stops: [.init(color: .black.opacity(0.1), location: 0), .init(color: .black.opacity(0.7), location: 1)],
+          startPoint: .top, endPoint: .bottom)
       }
     } else {
       cardBackground
@@ -1271,31 +1388,35 @@ struct MapRotationView: View {
     default:
       VStack(alignment: .leading, spacing: 4) {
         HStack {
-          MonoLabel(entry.mode.title, color: .white, size: 10)
+          MonoLabel(entry.mode.title, color: .white, size: 9)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(.black.opacity(0.55), in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.12)))
-          Spacer(minLength: 0)
+            .background(.black.opacity(0.35), in: Capsule())
+            .overlay(Capsule().stroke(border))
+          Spacer(minLength: 4)
           if family == .systemMedium, let next = entry.next {
-            MonoLabel("Next: \(next)", color: textDim, size: 9)
+            MonoLabel("Next: \(next)", color: .white, size: 9)
+              .padding(.horizontal, 10)
+              .padding(.vertical, 5)
+              .background(.black.opacity(0.35), in: Capsule())
           }
         }
         Spacer(minLength: 0)
         HStack(spacing: 6) {
           Circle().fill(accent).frame(width: 6, height: 6)
-          MonoLabel("Now playing", color: accent, size: 10)
+          MonoLabel("Now playing", color: .white, size: 9)
         }
         Text((entry.current ?? "—").uppercased())
-          .font(display(family == .systemSmall ? 28 : 34))
+          .font(display(family == .systemSmall ? 26 : 30))
           .lineLimit(1)
           .minimumScaleFactor(0.5)
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-          countdown.font(grotesk(family == .systemSmall ? 16 : 20, .medium).monospacedDigit())
+          .shadow(color: .black.opacity(0.55), radius: 8)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          countdown.font(grotesk(family == .systemSmall ? 15 : 18, .medium).monospacedDigit())
           if let end = entry.end, family == .systemMedium {
-            Text("Ends \(danishClock(end))")
-              .font(grotesk(10).monospacedDigit())
-              .foregroundStyle(textDim)
+            Text("ENDS \(danishClock(end))")
+              .font(grotesk(11).monospacedDigit())
+              .foregroundStyle(.white.opacity(0.7))
           }
         }
         if let start = entry.start, let end = entry.end, end > start {

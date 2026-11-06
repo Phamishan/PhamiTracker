@@ -37,7 +37,7 @@ import {
   unsubscribeLiveStart,
 } from "./live.js";
 import { currentPeriod } from "./periods.js";
-import { getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
+import { claimPoll, getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { getApexSeason } from "./seasons.js";
 import { characterStats, periodStats, summarize } from "./stats.js";
 
@@ -153,7 +153,8 @@ async function route(request, env, ctx) {
   // a live poll if the cron hasn't looked at them in the last few seconds.
   let fresh = player;
   const wantsRefresh = url.searchParams.get("refresh") === "1" || widget;
-  if (wantsRefresh && now - (player.last_polled_at ?? 0) > REFRESH_AFTER_MS) {
+  // If another request (or the cron) is already polling them, use what's stored.
+  if (wantsRefresh && now - (player.last_polled_at ?? 0) > REFRESH_AFTER_MS && (await claimPoll(env, player, now))) {
     fresh = await pollPlayer(env, player).catch(() => player);
   }
   ctx.waitUntil(
@@ -307,13 +308,20 @@ async function createPlayer(request, env) {
 
   if (!player) {
     const id = crypto.randomUUID();
+    // OR IGNORE: a second link request for the same new account (a double tap) lands here too.
     await env.DB.prepare(
-      `INSERT INTO players (id, game, name, tag, platform, region, external_id, last_opened_at, created_at)
+      `INSERT OR IGNORE INTO players (id, game, name, tag, platform, region, external_id, last_opened_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(id, lower.game, lower.name, lower.tag, lower.platform, lower.region, snapshot.externalId, now, now)
       .run();
-    player = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(id).first();
+    player =
+      (await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(id).first()) ??
+      (await env.DB.prepare(
+        "SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?",
+      )
+        .bind(lower.game, lower.platform, lower.region, lower.name, lower.tag)
+        .first());
   }
   // First poll stores the snapshot (and for VALORANT backfills recent ranked games).
   player = await pollPlayer(env, player).catch(() => player);

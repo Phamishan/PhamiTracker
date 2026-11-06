@@ -12,7 +12,7 @@
 // Secrets: APNS_KEY (the .p8 file's contents), APNS_KEY_ID, APNS_TEAM_ID.
 // Var:     APNS_TOPIC (the app's bundle id, default phamishan.phamitracker).
 
-import { rankLabel } from "./poller.js";
+import { changes, rankLabel } from "./poller.js";
 
 const MINUTES = 60_000;
 const HOURS = 60 * MINUTES;
@@ -130,11 +130,14 @@ export async function trackLiveSession(env, player, state, recorded, now = Date.
 
   const startScore = (player.score ?? 0) - fresh.reduce((sum, m) => sum + m.delta, 0);
   const startedAt = fresh.length ? Math.min(...fresh.map((m) => m.ts)) : now;
-  await env.DB.prepare(
-    "INSERT OR REPLACE INTO live_sessions (player_id, started_at, start_score, last_activity_at) VALUES (?, ?, ?, ?)",
+  // Two polls can both get here; only the one that creates the session sends the start push.
+  const created = await env.DB.prepare(
+    `INSERT INTO live_sessions (player_id, started_at, start_score, last_activity_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (player_id) DO NOTHING`,
   )
     .bind(player.id, startedAt, startScore, now)
     .run();
+  if (changes(created) !== 1) return "continued";
   if (!liveActivitiesEnabled(env)) return "started";
 
   const payload = {

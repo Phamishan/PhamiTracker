@@ -97,3 +97,8 @@
   - Added K/D to By Map and By Agent (VALORANT)
   - Reordered the home screen
   - New app icon
+- 1.0.8 - 06/11/2026
+  - Fixed Apex games sometimes being recorded more than once
+  - Fixed the Live Activity sometimes starting twice
+  - Fixed linking an account failing when tapped twice
+  - Fewer duplicate rank checks

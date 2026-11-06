@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { endIdleSessions, registerLiveActivity, sessionState, subscribeLiveStart, trackLiveSession } from "../src/live.js";
 import { characterStats, mapStats } from "../src/stats.js";
+import { pollPlayer } from "../src/poller.js";
 
 const MIN = 60_000;
 const t0 = Date.UTC(2026, 10, 5, 18);
@@ -133,4 +134,66 @@ test("K/D per map and agent when kills are recorded", () => {
   assert.deepEqual(characterStats(rows)[0], { name: "Jett", matches: 2, delta: 42, wins: 2, kills: 45, deaths: 22 });
   // Apex has no kills: no K/D fields.
   assert.deepEqual(mapStats([{ kind: "match", delta: 50, detail: { map: "Olympus" } }])[0], { map: "Olympus", matches: 1, delta: 50, wins: 1 });
+});
+
+test("Apex: simultaneous polls of the same rank change record one game", async (t) => {
+  const { env, DB } = setup({ score: 7203 });
+  env.APEX_API_KEY = "k";
+  DB.raw.prepare("UPDATE players SET external_id = '42', last_change_at = ? WHERE id = 'p1'").run(t0 - 15 * MIN);
+  DB.raw.prepare("INSERT INTO cache (key, value, expires_at) VALUES ('apex:maps', '{}', ?)").run(Date.now() + 60 * MIN);
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ global: { uid: 42, name: "PH4M1", rank: { rankScore: 7205, rankName: "Gold", rankDiv: 2 } } }),
+  );
+  const row = player(DB);
+  // Cron, app refresh and a widget all loaded the same row before any of them saved.
+  await Promise.all([pollPlayer(env, row), pollPlayer(env, row), pollPlayer(env, row)]);
+  const games = DB.raw.prepare("SELECT delta, score_after FROM matches").all();
+  assert.deepEqual(games.map((g) => [g.delta, g.score_after]), [[2, 7205]]);
+
+  // Dropping back and making the same +2 again later is a new game.
+  DB.raw.prepare("UPDATE players SET score = 7203, last_change_at = ? WHERE id = 'p1'").run(t0 + 30 * MIN);
+  await pollPlayer(env, player(DB));
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM matches").get().n, 2);
+});
+
+test("two polls seeing the same start send one push-to-start", async (t) => {
+  const { env, DB, pushes } = setup();
+  mockApns(t, pushes);
+  await subscribeLiveStart(env, { token: token("d"), players: ["p1"] }, t0);
+  const results = await Promise.all([
+    trackLiveSession(env, player(DB), { status: { inGame: true } }, [], t0),
+    trackLiveSession(env, player(DB), { status: { inGame: true } }, [], t0),
+  ]);
+  assert.deepEqual(results.sort(), ["continued", "started"]);
+  assert.equal(pushes.filter((p) => p.body.aps.event === "start").length, 1);
+});
+
+test("only one of several simultaneous callers gets to poll", async () => {
+  const { claimPoll } = await import("../src/poller.js");
+  const { env, DB } = setup();
+  const row = player(DB);
+  const wins = await Promise.all([claimPoll(env, row, t0), claimPoll(env, row, t0 + 1), claimPoll(env, row, t0 + 2)]);
+  assert.equal(wins.filter(Boolean).length, 1);
+  // Next round (fresh row) can claim again.
+  assert.equal(await claimPoll(env, player(DB), t0 + 60_000), true);
+});
+
+test("a double-tapped link creates one player and both requests succeed", async (t) => {
+  const { default: worker } = await import("../src/index.js");
+  const { env, DB } = setup();
+  DB.raw.prepare("DELETE FROM players").run();
+  env.APEX_API_KEY = "k";
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ global: { uid: 7, name: "Newbie", rank: { rankScore: 1000, rankName: "Bronze", rankDiv: 4 } } }),
+  );
+  const link = () =>
+    worker.fetch(
+      new Request("https://tracker.test/v1/players", { method: "POST", body: JSON.stringify({ game: "apex", name: "Newbie", platform: "PC" }) }),
+      env,
+      { waitUntil: () => {} },
+    );
+  const [a, b] = await Promise.all([link(), link()]);
+  assert.deepEqual([a.status, b.status], [201, 201]);
+  assert.equal((await a.json()).player.id, (await b.json()).player.id);
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM players").get().n, 1);
 });

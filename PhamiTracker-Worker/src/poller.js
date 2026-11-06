@@ -31,12 +31,29 @@ export async function pollDue(env, now = Date.now()) {
   // above already keeps us under it. Each game runs sequentially, both games in parallel.
   const run = async (players, gap) => {
     for (const player of players) {
+      // The app or a widget may have polled them since this list was loaded.
+      if (!(await claimPoll(env, player))) continue;
       await pollPlayer(env, player).catch((err) => console.error("poll failed", player.id, err));
       await sleep(gap);
     }
   };
   await Promise.all([run(apex, 550), run(valorant, 250)]);
   return { apex: apex.length, valorant: valorant.length };
+}
+
+/** Rows changed by a D1 run() (or node:sqlite's, in tests). */
+export const changes = (result) => result?.meta?.changes ?? result?.changes ?? 0;
+
+/**
+ * Claims the player's next poll for this caller. The cron, the open app and every widget can ask
+ * for the same player at the same moment; only the caller whose compare-and-set on last_polled_at
+ * wins polls, the others use what's stored. Saves API calls and duplicate Live Activity pushes.
+ */
+export async function claimPoll(env, player, now = Date.now()) {
+  const result = await env.DB.prepare("UPDATE players SET last_polled_at = ? WHERE id = ? AND last_polled_at IS ?")
+    .bind(now, player.id, player.last_polled_at ?? null)
+    .run();
+  return changes(result) === 1;
 }
 
 /** Polls one player and stores the result. Returns the updated row. */
@@ -112,6 +129,9 @@ async function pollApex(env, player, prevState, now) {
       delta,
       scoreAfter: state.score,
       kind,
+      // The cron, the app and a widget can poll at the same moment and all see this change.
+      // They share this key (same starting row), so INSERT OR IGNORE keeps exactly one.
+      externalId: `apex:${player.last_change_at ?? 0}:${player.score}>${state.score}`,
       detail: {
         // The legend they were last seen in a match with is the one this RP came from.
         legend: (prevState?.status?.inGame && prevState.status.legend) || state.status.legend,
