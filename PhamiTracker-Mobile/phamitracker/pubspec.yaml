@@ -2,7 +2,7 @@ name: phamitracker
 description: "Live rank tracker for Apex Legends and VALORANT."
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.8+1
+version: 1.0.9+1
 
 environment:
   sdk: ^3.13.7

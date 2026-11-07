@@ -254,14 +254,16 @@ export async function apnsJwt(env, now = Date.now()) {
   return token;
 }
 
-export async function sendApns(env, target, payload, now) {
+/** type "liveactivity" (lock screen / Dynamic Island) or "alert" (a normal notification). */
+export async function sendApns(env, target, payload, now, type = "liveactivity") {
+  const topic = env.APNS_TOPIC || "phamishan.phamitracker";
   const host = target.sandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
   const res = await fetch(`https://${host}/3/device/${target.token}`, {
     method: "POST",
     headers: {
       authorization: `bearer ${await apnsJwt(env, now)}`,
-      "apns-topic": `${env.APNS_TOPIC || "phamishan.phamitracker"}.push-type.liveactivity`,
-      "apns-push-type": "liveactivity",
+      "apns-topic": type === "liveactivity" ? `${topic}.push-type.liveactivity` : topic,
+      "apns-push-type": type,
       "apns-priority": "10",
       "content-type": "application/json",
     },

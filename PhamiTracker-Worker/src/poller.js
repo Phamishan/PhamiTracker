@@ -2,10 +2,12 @@
 
 import { fetchApexMaps, fetchApexPlayer, fetchApexPredator, rankedMapAt } from "./apex.js";
 import { pushLiveActivities, trackLiveSession } from "./live.js";
+import { notifyFollowers } from "./notify.js";
 import { fetchValorantHistory, fetchValorantMatchDetails, fetchValorantPlayer } from "./valorant.js";
 import { isApexAdjustment, nextPollDelay } from "./stats.js";
 
 const DAY = 86_400_000;
+export const FAVOURITE_POLL_MS = 5 * 60_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -15,7 +17,8 @@ export async function pollDue(env, now = Date.now()) {
   const due = async (game, limit) =>
     (
       await env.DB.prepare(
-        `SELECT * FROM players WHERE game = ? AND next_poll_at <= ? AND last_opened_at >= ?
+        `SELECT * FROM players WHERE game = ? AND next_poll_at <= ?
+           AND (last_opened_at >= ? OR EXISTS (SELECT 1 FROM follows f WHERE f.player_id = players.id))
          ORDER BY next_poll_at LIMIT ?`,
       )
         .bind(game, now, activeSince, limit)
@@ -67,12 +70,12 @@ export async function pollPlayer(env, player) {
 
     const changed = result.matches.length > 0;
     const lastChangeAt = changed ? now : player.last_change_at;
-    const nextPollAt = now + nextPollDelay(player.game, {
-      now,
-      state: result.state,
-      lastChangeAt,
-      lastOpenedAt: player.last_opened_at,
-    });
+    // Players only tracked because someone favourited them: every 5 minutes is plenty.
+    const favouriteOnly = (player.last_opened_at ?? 0) < now - Number(env.INACTIVE_AFTER_DAYS ?? 21) * DAY;
+    const nextPollAt = now + Math.max(
+      favouriteOnly ? FAVOURITE_POLL_MS : 0,
+      nextPollDelay(player.game, { now, state: result.state, lastChangeAt, lastOpenedAt: player.last_opened_at }),
+    );
 
     const statements = result.matches.map((m) =>
       env.DB.prepare(
@@ -102,6 +105,9 @@ export async function pollPlayer(env, player) {
     await trackLiveSession(env, updated, result.state, result.matches, now)
       .catch((err) => console.error("live session failed", err));
     if (changed) await pushLiveActivities(env, updated, now).catch((err) => console.error("live activity push failed", err));
+    // Favourites: rank changes, streaks and session recaps for the people following them.
+    await notifyFollowers(env, updated, prevState, result.state, result.matches, now)
+      .catch((err) => console.error("follow notifications failed", err));
     return updated;
   } catch (err) {
     const errorCount = (player.error_count ?? 0) + 1;

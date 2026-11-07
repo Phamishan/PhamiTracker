@@ -20,6 +20,7 @@
 🔍 - Search any player, with favourites
 📱 - Home screen & lock screen widgets (RP Today, Rank Goal, Climb, Map Rotation)
 🏝️ - Automatic Live Activity (lock screen & Dynamic Island)
+🔔 - Notifications about your favourites (rank ups, streaks, session recaps)
 🆓 - Free
 ⛔ - No ads
 ```
@@ -102,3 +103,8 @@
   - Fixed the Live Activity sometimes starting twice
   - Fixed linking an account failing when tapped twice
   - Fewer duplicate rank checks
+- 1.0.9 - 07/11/2026
+  - Added notifications about your favourite players
+  - Get notified when a favourite ranks up or down
+  - Get notified about win and loss streaks
+  - Get a recap when a favourite finishes a session

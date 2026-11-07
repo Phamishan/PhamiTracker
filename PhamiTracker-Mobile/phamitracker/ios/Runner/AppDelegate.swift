@@ -1,6 +1,7 @@
 import ActivityKit
 import Flutter
 import UIKit
+import UserNotifications
 import WidgetKit
 
 /// App Group shared with the widget extension (must match both targets' entitlements).
@@ -36,7 +37,32 @@ struct PhamiSessionAttributes: ActivityAttributes {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // So notifications about favourites also show while the app is open.
+    UNUserNotificationCenter.current().delegate = self
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// Waiting for iOS to hand over the push token (see the phamitracker/notifications channel).
+  private var pendingPushToken: FlutterResult?
+
+  override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    pendingPushToken?(deviceToken.map { String(format: "%02x", $0) }.joined())
+    pendingPushToken = nil
+  }
+
+  override func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+    pendingPushToken?(FlutterError(code: "register_failed", message: error.localizedDescription, details: nil))
+    pendingPushToken = nil
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner, .list, .sound])
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
@@ -57,6 +83,26 @@ struct PhamiSessionAttributes: ActivityAttributes {
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // Push notifications about favourites: asks permission, then returns the APNs token (hex),
+    // or nil if the user said no. Flutter registers it with the worker.
+    let notifications = FlutterMethodChannel(name: "phamitracker/notifications", binaryMessenger: registrar.messenger())
+    notifications.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "requestToken" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+        DispatchQueue.main.async {
+          guard granted else {
+            result(nil)
+            return
+          }
+          self?.pendingPushToken = result
+          UIApplication.shared.registerForRemoteNotifications()
+        }
       }
     }
 

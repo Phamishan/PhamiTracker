@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models/account.dart';
 import '../models/game.dart';
 import '../models/match_detail.dart';
+import '../models/player_query.dart';
 import '../models/summary.dart';
 
 class TrackerApiException implements Exception {
@@ -140,6 +141,16 @@ class TrackerApi {
 
   Future<void> endLiveActivity(String playerId, String token) =>
       _send('DELETE', '/v1/players/$playerId/live-activity/$token');
+
+  /// Notifications about these favourites go to this phone (replaces its previous list).
+  Future<void> registerNotifications(String token, {required bool sandbox, required List<PlayerQuery> follows}) =>
+      _send('POST', '/v1/notifications', body: {
+        'token': token,
+        'sandbox': sandbox,
+        'follows': [for (final q in follows) q.toJson()],
+      });
+
+  Future<void> unregisterNotifications(String token) => _send('DELETE', '/v1/notifications/$token');
 
   Future<void> unlink(String playerId) => _send('DELETE', '/v1/players/$playerId');
 

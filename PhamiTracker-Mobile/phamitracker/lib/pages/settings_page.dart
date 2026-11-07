@@ -27,6 +27,8 @@ class SettingsPage extends StatelessWidget {
           if (defaultTargetPlatform == TargetPlatform.iOS) ...[
             const SectionTitle('Live Activity'),
             const _LiveActivityTile(),
+            const SectionTitle('Notifications'),
+            const _NotificationsTile(),
           ],
           const SectionTitle('Widgets'),
           const TrackerCard(
@@ -250,6 +252,55 @@ class _LiveActivityTile extends StatelessWidget {
               'Your session appears on the lock screen and in the Dynamic Island when you load into an Apex '
               'match, or after your first VALORANT ranked game, without opening the app. It updates after '
               'every game and ends 45 minutes after your last one. Turning this off stops it completely.',
+              style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Push notifications about favourite players: rank changes, streaks and session recaps.
+class _NotificationsTile extends StatelessWidget {
+  const _NotificationsTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final on = state.notificationsEnabled;
+    final count = state.favorites.length;
+    return TrackerCard(
+      padding: const EdgeInsets.fromLTRB(18, 14, 10, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.notifications_rounded, color: on ? AppColors.accent : AppColors.textFaint),
+              const SizedBox(width: 14),
+              const Expanded(child: Text("Favourites' grind", style: TextStyle(fontWeight: FontWeight.w600))),
+              Switch(
+                value: on,
+                activeThumbColor: AppColors.accent,
+                onChanged: (value) async {
+                  final ok = await state.setNotificationsEnabled(value);
+                  if (!ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Allow notifications for PhamiTracker in iOS Settings first.'),
+                    ));
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              'Get a heads-up when a favourite ranks up or down, goes on a win or loss streak, or wraps up a '
+              'session. Star players on their page in Search. '
+              '${count == 0 ? 'You have no favourites yet.' : 'Following $count ${count == 1 ? 'player' : 'players'}.'}',
               style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
             ),
           ),

@@ -6,6 +6,8 @@
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   DELETE /v1/players/:id             stop tracking
+//   POST   /v1/notifications           push notifications about favourites  {token, sandbox?, follows: [{game, name, tag?, platform, region?}]}
+//   DELETE /v1/notifications/:token    notifications turned off
 //   POST   /v1/live/subscribe          auto Live Activities: push-to-start token  {token, sandbox?, players: [ids]}
 //   DELETE /v1/live/subscribe/:token   setting turned off
 //   POST   /v1/players/:id/live-activity          register a Live Activity push token  {token, sandbox?, startScore?}
@@ -36,6 +38,7 @@ import {
   subscribeLiveStart,
   unsubscribeLiveStart,
 } from "./live.js";
+import { registerDevice, unregisterDevice } from "./notify.js";
 import { currentPeriod } from "./periods.js";
 import { claimPoll, getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { getApexSeason } from "./seasons.js";
@@ -102,6 +105,14 @@ async function route(request, env, ctx) {
   if (parts[1] === "valorant" && parts[2] === "matches" && parts[3] && parts.length === 4 && request.method === "GET") {
     return valorantMatch(env, parts[3], url);
   }
+  if (parts[1] === "notifications") {
+    if (parts.length === 2 && request.method === "POST") return registerNotifications(request, env);
+    if (parts.length === 3 && request.method === "DELETE") {
+      await unregisterDevice(env, parts[2]);
+      return json({ ok: true });
+    }
+    return fail(404, "Not found");
+  }
   if (parts[1] === "live" && parts[2] === "subscribe") {
     if (parts.length === 3 && request.method === "POST") {
       const result = await subscribeLiveStart(env, await request.json().catch(() => null));
@@ -128,6 +139,7 @@ async function route(request, env, ctx) {
       env.DB.prepare("DELETE FROM live_activities WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM live_subscriptions WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM live_sessions WHERE player_id = ?").bind(player.id),
+      env.DB.prepare("DELETE FROM follows WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM matches WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM players WHERE id = ?").bind(player.id),
     ]);
@@ -266,31 +278,57 @@ async function history(env, player, url, { now, tzOffset }) {
 async function createPlayer(request, env) {
   const body = await request.json().catch(() => null);
   if (!body) return fail(400, "Expected JSON body");
+  const found = await resolvePlayer(env, body, { opened: true });
+  if (found.error) return fail(found.status, found.error);
+  // First poll stores the snapshot (and for VALORANT backfills recent ranked games).
+  const player = await pollPlayer(env, found.player).catch(() => found.player);
+  const state = player.state ? JSON.parse(player.state) : null;
+  return json({ player: publicPlayer(player, state), rankLabel: rankLabel(player.game, state), score: player.score }, 201);
+}
+
+/**
+ * Finds the players row for {game, name, tag?, platform, region?, uid?}, creating it (after
+ * checking the account exists) if nobody tracks it yet. `opened` marks it as someone's own
+ * account; favourites-only players are checked less often.
+ */
+async function resolvePlayer(env, body, { opened }) {
   const game = body.game;
   const name = String(body.name ?? "").trim();
   // Apex names aren't unique, so a uid is the only way to be sure which account gets linked.
   const uid = game === "apex" ? String(body.uid ?? "").trim() : "";
-  if (!name && !uid) return fail(400, "name is required");
+  if (!name && !uid) return { status: 400, error: "name is required" };
 
   let key;
-  let snapshot;
   if (game === "apex") {
     const platform = String(body.platform ?? "PC").toUpperCase();
-    if (!APEX_PLATFORMS.includes(platform)) return fail(400, `platform must be one of ${APEX_PLATFORMS}`);
-    snapshot = await fetchApexPlayer(env, { name, platform, uid: uid || undefined });
-    key = { game, platform, region: "", name: uid ? snapshot.name ?? uid : name, tag: "" };
+    if (!APEX_PLATFORMS.includes(platform)) return { status: 400, error: `platform must be one of ${APEX_PLATFORMS}` };
+    key = { game, platform, region: "", name, tag: "" };
   } else if (game === "valorant") {
     const tag = String(body.tag ?? "").trim().replace(/^#/, "");
     const region = String(body.region ?? "eu").toLowerCase();
     const platform = String(body.platform ?? "pc").toLowerCase();
-    if (!tag) return fail(400, "tag is required");
-    if (!VALORANT_REGIONS.includes(region)) return fail(400, `region must be one of ${VALORANT_REGIONS}`);
-    if (!VALORANT_PLATFORMS.includes(platform)) return fail(400, `platform must be one of ${VALORANT_PLATFORMS}`);
-    snapshot = await fetchValorantPlayer(env, { name, tag, region, platform });
+    if (!tag) return { status: 400, error: "tag is required" };
+    if (!VALORANT_REGIONS.includes(region)) return { status: 400, error: `region must be one of ${VALORANT_REGIONS}` };
+    if (!VALORANT_PLATFORMS.includes(platform)) return { status: 400, error: `platform must be one of ${VALORANT_PLATFORMS}` };
     key = { game, platform, region, name, tag };
   } else {
-    return fail(400, "game must be apex or valorant");
+    return { status: 400, error: "game must be apex or valorant" };
   }
+  const byKey = (k) =>
+    env.DB.prepare("SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?")
+      .bind(k.game, k.platform, k.region, k.name.toLowerCase(), k.tag.toLowerCase())
+      .first();
+
+  // Already tracked under this name: no API call needed.
+  if (!uid) {
+    const existing = await byKey(key);
+    if (existing) return { player: existing };
+  }
+
+  const snapshot = game === "apex"
+    ? await fetchApexPlayer(env, { name, platform: key.platform, uid: uid || undefined })
+    : await fetchValorantPlayer(env, key);
+  if (uid) key.name = snapshot.name ?? uid;
 
   const now = Date.now();
   const lower = { ...key, name: key.name.toLowerCase(), tag: key.tag.toLowerCase() };
@@ -300,38 +338,49 @@ async function createPlayer(request, env) {
         .first()
     : null;
   if (!player) {
-    player = await env.DB.prepare(
-      "SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?",
-    )
-      .bind(lower.game, lower.platform, lower.region, lower.name, lower.tag)
-      .first();
+    player = await byKey(lower);
     // Same name, different account: don't hand back someone else's history.
     if (player && uid && player.external_id && player.external_id !== snapshot.externalId) {
-      return fail(409, `"${key.name}" is already linked to a different account`);
+      return { status: 409, error: `"${key.name}" is already linked to a different account` };
     }
   }
 
   if (!player) {
     const id = crypto.randomUUID();
-    // OR IGNORE: a second link request for the same new account (a double tap) lands here too.
+    // OR IGNORE: a second request for the same new account (a double tap) lands here too.
     await env.DB.prepare(
       `INSERT OR IGNORE INTO players (id, game, name, tag, platform, region, external_id, last_opened_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(id, lower.game, lower.name, lower.tag, lower.platform, lower.region, snapshot.externalId, now, now)
+      .bind(id, lower.game, lower.name, lower.tag, lower.platform, lower.region, snapshot.externalId, opened ? now : 0, now)
       .run();
-    player =
-      (await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(id).first()) ??
-      (await env.DB.prepare(
-        "SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?",
-      )
-        .bind(lower.game, lower.platform, lower.region, lower.name, lower.tag)
-        .first());
+    player = (await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(id).first()) ?? (await byKey(lower));
   }
-  // First poll stores the snapshot (and for VALORANT backfills recent ranked games).
-  player = await pollPlayer(env, player).catch(() => player);
-  const state = player.state ? JSON.parse(player.state) : null;
-  return json({ player: publicPlayer(player, state), rankLabel: rankLabel(player.game, state), score: player.score }, 201);
+  return { player };
+}
+
+/**
+ * A phone's push token and its favourites, as search queries. Unknown players are looked up
+ * (and from then on checked every 5 minutes) so the phone can be told about their grind.
+ */
+async function registerNotifications(request, env) {
+  const body = await request.json().catch(() => null);
+  if (!body) return fail(400, "Expected JSON body");
+  const follows = (Array.isArray(body.follows) ? body.follows : []).slice(0, MAX_FOLLOWS);
+  const ids = [];
+  const missing = [];
+  for (const follow of follows) {
+    const found = await resolvePlayer(env, follow, { opened: false }).catch((err) => ({ error: err.message }));
+    if (found.error) {
+      missing.push({ ...follow, error: found.error });
+      continue;
+    }
+    // Brand new to the worker: take a baseline now so the first real change is news.
+    if (!found.player.state) await pollPlayer(env, found.player).catch(() => null);
+    ids.push(found.player.id);
+  }
+  const result = await registerDevice(env, { token: body.token, sandbox: body.sandbox, players: [...new Set(ids)] });
+  return result.error ? fail(400, result.error) : json({ ...result, missing });
 }
 
 // A finished match never changes, so its scoreboard is kept for a week.
@@ -353,6 +402,9 @@ async function valorantMatch(env, matchId, url) {
     .run();
   return json(match);
 }
+
+// Favourites a phone can get notifications about.
+const MAX_FOLLOWS = 20;
 
 // Searches hit the game APIs directly, so repeat lookups of the same player are cached briefly.
 const SEARCH_CACHE_MS = 60_000;

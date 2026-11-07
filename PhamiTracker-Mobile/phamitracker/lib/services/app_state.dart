@@ -10,14 +10,21 @@ import '../models/player_query.dart';
 import '../models/ranks.dart';
 import '../models/summary.dart';
 import 'live_activity.dart';
+import 'notification_service.dart';
 import 'tracker_api.dart';
 import 'widget_bridge.dart';
 
 /// App-wide state: which game is showing, linked accounts, goals and the latest summaries.
 class AppState extends ChangeNotifier {
-  AppState({required this.api, required this._prefs, WidgetBridge? widgets, LiveActivityService? liveActivities})
-    : _widgets = widgets ?? WidgetBridge(),
-      liveActivities = liveActivities ?? LiveActivityService() {
+  AppState({
+    required this.api,
+    required this._prefs,
+    WidgetBridge? widgets,
+    LiveActivityService? liveActivities,
+    NotificationService? notifications,
+  }) : _widgets = widgets ?? WidgetBridge(),
+       liveActivities = liveActivities ?? LiveActivityService(),
+       notifications = notifications ?? NotificationService() {
     _load();
   }
 
@@ -29,6 +36,11 @@ class AppState extends ChangeNotifier {
   final SharedPreferences _prefs;
   final WidgetBridge _widgets;
   final LiveActivityService liveActivities;
+  final NotificationService notifications;
+
+  /// Push notifications about favourites (Settings). The worker sends them.
+  bool notificationsEnabled = false;
+  String? _pushToken;
 
   /// Search: the last few players looked up, and starred ones. Newest first.
   final List<PlayerQuery> recentSearches = [];
@@ -111,6 +123,10 @@ class AppState extends ChangeNotifier {
     favorites.addAll(queries('search.favorites'));
 
     liveActivityEnabled = _prefs.getBool('live.enabled') ?? false;
+    notificationsEnabled = _prefs.getBool('notify.enabled') ?? false;
+    _pushToken = _prefs.getString('notify.token');
+    // iOS can change the token; re-register quietly on every launch (no prompt once allowed).
+    if (notificationsEnabled) unawaited(_refreshPushToken());
   }
 
   // MARK: Search history
@@ -145,6 +161,49 @@ class AppState extends ChangeNotifier {
       favorites.insert(0, query);
     }
     _saveSearches();
+    unawaited(_syncNotifications());
+  }
+
+  // MARK: Notifications
+
+  /// Returns false (and stays off) if iOS notifications aren't allowed for PhamiTracker.
+  Future<bool> setNotificationsEnabled(bool enabled) async {
+    if (enabled) {
+      final token = await notifications.requestToken();
+      if (token == null) return false;
+      _pushToken = token;
+      await _prefs.setString('notify.token', token);
+    }
+    notificationsEnabled = enabled;
+    await _prefs.setBool('notify.enabled', enabled);
+    notifyListeners();
+    if (enabled) {
+      await _syncNotifications();
+    } else if (_pushToken case final token?) {
+      // Fully off: the worker forgets this phone and its favourites.
+      unawaited(api.unregisterNotifications(token).catchError((Object _) {}));
+    }
+    return true;
+  }
+
+  Future<void> _refreshPushToken() async {
+    final token = await notifications.requestToken();
+    if (token != null && token != _pushToken) {
+      _pushToken = token;
+      await _prefs.setString('notify.token', token);
+    }
+    await _syncNotifications();
+  }
+
+  /// Sends the current favourites to the worker (call after they change).
+  Future<void> _syncNotifications() async {
+    final token = _pushToken;
+    if (!notificationsEnabled || token == null) return;
+    try {
+      await api.registerNotifications(token, sandbox: !kReleaseMode, follows: favorites);
+    } on TrackerApiException {
+      // Offline or the worker is down: the next change or launch tries again.
+    }
   }
 
   void _saveSearches() {

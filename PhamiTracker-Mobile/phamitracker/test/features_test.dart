@@ -11,6 +11,7 @@ import 'package:phamitracker/models/ranks.dart';
 import 'package:phamitracker/models/summary.dart';
 import 'package:phamitracker/services/app_state.dart';
 import 'package:phamitracker/services/live_activity.dart';
+import 'package:phamitracker/services/notification_service.dart';
 import 'package:phamitracker/services/tracker_api.dart';
 import 'package:phamitracker/theme/app_theme.dart';
 import 'package:phamitracker/widgets/common.dart';
@@ -74,12 +75,22 @@ class _FakeLive extends LiveActivityService {
   Future<void> setEnabled(bool enabled) async => calls.add(enabled);
 }
 
-Future<AppState> _state(http.Client client, {Map<String, Object> prefs = const {}, LiveActivityService? live}) async {
+class _FakeNotifications extends NotificationService {
+  _FakeNotifications(this.token);
+
+  final String? token;
+
+  @override
+  Future<String?> requestToken() async => token;
+}
+
+Future<AppState> _state(http.Client client, {Map<String, Object> prefs = const {}, LiveActivityService? live, NotificationService? notifications}) async {
   SharedPreferences.setMockInitialValues(prefs);
   return AppState(
     api: TrackerApi(const TrackerConfig(baseUrl: 'https://tracker.test', appKey: 'k'), client: client),
     prefs: await SharedPreferences.getInstance(),
     liveActivities: live,
+    notifications: notifications,
   );
 }
 
@@ -186,6 +197,38 @@ void main() {
     final blocked = await _state(MockClient((r) async => http.Response('{}', 404)), live: _FakeLive(allow: false));
     expect(await blocked.setLiveActivityEnabled(true), isFalse);
     expect(blocked.liveActivityEnabled, isFalse);
+  });
+
+  test('notifications: on sends favourites, starring re-sends, off unregisters', () async {
+    final requests = <String>[];
+    final state = await _state(
+      MockClient((r) async {
+        requests.add('${r.method} ${r.url.path} ${r.body}');
+        return http.Response('{"ok":true}', 200);
+      }),
+      notifications: _FakeNotifications('ab' * 32),
+    );
+    PlayerQuery q(String name) => PlayerQuery(game: Game.valorant, name: name, tag: 'EUW', platform: 'pc', region: 'eu');
+    state.toggleFavorite(q('Rival'));
+    expect(requests, isEmpty); // off: nothing sent
+
+    expect(await state.setNotificationsEnabled(true), isTrue);
+    expect(requests.last, startsWith('POST /v1/notifications'));
+    expect(requests.last, contains('"name":"Rival"'));
+    expect(requests.last, contains('"token":"${'ab' * 32}"'));
+
+    state.toggleFavorite(q('Friend'));
+    await Future<void>.delayed(Duration.zero);
+    expect(requests.last, contains('"name":"Friend"'));
+
+    expect(await state.setNotificationsEnabled(false), isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(requests.last, startsWith('DELETE /v1/notifications/${'ab' * 32}'));
+
+    // Not allowed in iOS Settings: stays off.
+    final denied = await _state(MockClient((r) async => http.Response('{}', 200)), notifications: _FakeNotifications(null));
+    expect(await denied.setNotificationsEnabled(true), isFalse);
+    expect(denied.notificationsEnabled, isFalse);
   });
 
   test('K/D per map and agent', () {
