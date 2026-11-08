@@ -18,9 +18,11 @@
 🎮 - Session recap (shareable)
 🔄 - Apex map rotation with countdown
 🔍 - Search any player, with favourites
+⚔️ - Head-to-head against any player
 📱 - Home screen & lock screen widgets (RP Today, Rank Goal, Climb, Map Rotation)
 🏝️ - Automatic Live Activity (lock screen & Dynamic Island)
-🔔 - Notifications about your favourites (rank ups, streaks, session recaps)
+🔔 - Notifications when you reach your goal, and about your favourites (rank ups, streaks, session recaps)
+🎉 - Rank-up & goal celebrations
 🆓 - Free
 ⛔ - No ads
 ```
@@ -108,3 +110,12 @@
   - Get notified when a favourite ranks up or down
   - Get notified about win and loss streaks
   - Get a recap when a favourite finishes a session
+- 1.1.0 - 08/11/2026
+  - Added head-to-head (compare yourself with any player you search for)
+  - Added a rank-up and goal reached celebration
+  - Added a notification when you reach your rank goal
+  - Shorter notification titles so the whole message fits
+  - Renamed the notification setting to Goals & favourites
+  - Fixed the VALORANT Live Activity not starting by itself
+  - Fixed VALORANT session recaps arriving mid-session
+  - Fixed long VALORANT sessions being split in two

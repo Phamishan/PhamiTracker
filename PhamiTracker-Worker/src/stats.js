@@ -156,6 +156,13 @@ export function periodStats(rows, { tzOffset = 0 } = {}) {
   };
 }
 
+/**
+ * How long after a player's last game their session counts as over. VALORANT games only show up
+ * once they've ended and last 30-45 minutes, so it needs room for a whole next game plus queue;
+ * Apex games are short (and Apex also reports "in match").
+ */
+export const sessionIdleMs = (game) => (game === "valorant" ? 75 : 45) * MINUTE;
+
 /** Apex RP swings bigger than this are season resets / corrections, not a single game. */
 export const APEX_ADJUSTMENT_THRESHOLD = 1000;
 

@@ -1,3 +1,4 @@
+import 'game.dart';
 import 'summary.dart';
 
 int? _int(Object? v) => v is num ? v.toInt() : null;
@@ -109,12 +110,17 @@ class PeriodStats {
 
 /// Games played close together. A gap of [gap] or more starts a new session.
 class Session {
-  const Session(this.matches);
+  const Session(this.matches, {this.game = Game.apex});
 
   /// Oldest first.
   final List<MatchEntry> matches;
+  final Game game;
 
-  static const gap = Duration(minutes: 45);
+  /// How far apart two games' times can be and still be one session. Matches the worker
+  /// (live.js / notify.js): a session ends 45 minutes after the last Apex game, 75 after the last
+  /// VALORANT one. VALORANT times are when a game *started*, so add a game's length (~45 min).
+  static Duration gapFor(Game game) =>
+      game == Game.valorant ? const Duration(minutes: 75 + 45) : const Duration(minutes: 45);
 
   DateTime get start => matches.first.time;
   DateTime get end => matches.last.time;
@@ -126,16 +132,17 @@ class Session {
   int get endScore => matches.last.scoreAfter;
   int get startScore => matches.first.scoreAfter - matches.first.delta;
 
-  bool isOver(DateTime now) => now.difference(end) >= gap;
+  bool isOver(DateTime now) => now.difference(end) >= gapFor(game);
 
   /// The most recent session, from a newest-first match list (rank adjustments don't count).
-  static Session? latest(List<MatchEntry> matches) {
+  static Session? latest(List<MatchEntry> matches, {Game game = Game.apex}) {
     final played = [for (final m in matches) if (!m.isAdjustment) m]..sort((a, b) => a.time.compareTo(b.time));
     if (played.isEmpty) return null;
+    final gap = gapFor(game);
     var first = played.length - 1;
     while (first > 0 && played[first].time.difference(played[first - 1].time) < gap) {
       first--;
     }
-    return Session(played.sublist(first));
+    return Session(played.sublist(first), game: game);
   }
 }

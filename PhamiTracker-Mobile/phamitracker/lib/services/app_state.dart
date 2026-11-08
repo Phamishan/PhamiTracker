@@ -200,7 +200,16 @@ class AppState extends ChangeNotifier {
     final token = _pushToken;
     if (!notificationsEnabled || token == null) return;
     try {
-      await api.registerNotifications(token, sandbox: !kReleaseMode, follows: favorites);
+      await api.registerNotifications(
+        token,
+        sandbox: !kReleaseMode,
+        follows: favorites,
+        goals: [
+          for (final MapEntry(key: game, value: goal) in goals.entries)
+            if (accounts[game] case final account?)
+              {'playerId': account.playerId, 'label': goal.label, 'targetScore': goal.targetScore},
+        ],
+      );
     } on TrackerApiException {
       // Offline or the worker is down: the next change or launch tries again.
     }
@@ -240,6 +249,46 @@ class AppState extends ChangeNotifier {
     final updated = RankGoal(label: goal.label, targetScore: cutoff, startScore: goal.startScore.clamp(0, cutoff));
     goals[game] = updated;
     _prefs.setString('goal.${game.id}', jsonEncode(updated.toJson()));
+    unawaited(_syncNotifications());
+  }
+
+  // MARK: Celebration
+
+  /// A rank up or reached goal to celebrate on screen. The home page shows it once, then calls
+  /// [dismissCelebration].
+  Celebration? celebration;
+
+  void dismissCelebration() {
+    celebration = null;
+    notifyListeners();
+  }
+
+  /// Compares the new summary with the last rank this phone showed. First load just remembers it.
+  void _checkCelebration(Game game) {
+    final s = summaries[game];
+    final score = s?.score;
+    if (s == null || score == null) return;
+    final rank = s.rankLabel ?? s.rank.name ?? '';
+    final key = 'seen.${game.id}';
+    final seen = _prefs.getString(key);
+    _prefs.setString(key, jsonEncode({'rank': rank, 'score': score}));
+    if (seen == null) return;
+    final before = jsonDecode(seen) as Map<String, dynamic>;
+    final beforeScore = (before['score'] as num).toInt();
+    if (score <= beforeScore) return; // dropped, or nothing new
+    // Season/act resets aren't a climb.
+    if (s.matches.isNotEmpty && s.matches.first.isAdjustment) return;
+    final goal = goals[game];
+    if (goal != null && score >= goal.targetScore && beforeScore < goal.targetScore) {
+      celebration = Celebration(
+        game: game,
+        title: 'Goal reached',
+        rank: goal.label,
+        image: goalIconUrl(game, goal.targetScore, label: goal.label),
+      );
+    } else if (rank != before['rank']) {
+      celebration = Celebration(game: game, title: 'Rank up', rank: rank, image: s.rank.image);
+    }
   }
 
   /// Starts the live refresh loop (call while the app is in the foreground).
@@ -275,6 +324,7 @@ class AppState extends ChangeNotifier {
           summaries[game] = await api.summary(account.playerId, refresh: true);
           errors.remove(game);
           _followPredatorCutoff(game);
+          _checkCelebration(game);
         } on TrackerApiException catch (e) {
           errors[game] = e.message;
         } finally {
@@ -366,6 +416,7 @@ class AppState extends ChangeNotifier {
     await _prefs.setString('goal.${game.id}', jsonEncode(goal.toJson()));
     notifyListeners();
     _syncWidgets();
+    unawaited(_syncNotifications());
   }
 
   Future<void> clearGoal(Game game) async {
@@ -373,6 +424,7 @@ class AppState extends ChangeNotifier {
     await _prefs.remove('goal.${game.id}');
     notifyListeners();
     _syncWidgets();
+    unawaited(_syncNotifications());
   }
 
   void _syncWidgets() {
@@ -391,4 +443,14 @@ class AppState extends ChangeNotifier {
     _timer?.cancel();
     super.dispose();
   }
+}
+
+/// Something worth confetti: a rank up or a reached goal.
+class Celebration {
+  const Celebration({required this.game, required this.title, required this.rank, this.image});
+
+  final Game game;
+  final String title;
+  final String rank;
+  final String? image;
 }

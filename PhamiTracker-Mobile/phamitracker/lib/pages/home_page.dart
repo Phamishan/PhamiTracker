@@ -5,6 +5,7 @@ import '../models/insights.dart';
 import '../models/summary.dart';
 import '../services/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/celebration.dart';
 import '../widgets/common.dart';
 import '../widgets/game_logo.dart';
 import '../widgets/game_switcher.dart';
@@ -62,6 +63,13 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final game = state.game;
+    // Rank up / goal reached since last time: celebrate once.
+    if (state.celebration case final celebration?) {
+      state.celebration = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showCelebration(context, celebration);
+      });
+    }
 
     return Scaffold(
       body: Stack(
@@ -147,9 +155,9 @@ class _Dashboard extends StatelessWidget {
         GoalCard(game: game, goal: state.goal, summary: summary, onTap: () => showGoalSheet(context, game)),
         const SizedBox(height: 12),
         TodayTile(game: game, today: summary?.today ?? const TodayStats()),
-        if (summary != null && Session.latest(summary.matches) != null) ...[
+        if (summary != null && Session.latest(summary.matches, game: game) != null) ...[
           const SizedBox(height: 12),
-          SessionCard(game: game, session: Session.latest(summary.matches)!, player: account.displayName),
+          SessionCard(game: game, session: Session.latest(summary.matches, game: game)!, player: account.displayName),
         ],
         SectionTitle(
           summary == null || summary.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${summary.matches.length}',

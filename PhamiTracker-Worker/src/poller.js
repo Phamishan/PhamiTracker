@@ -2,7 +2,7 @@
 
 import { fetchApexMaps, fetchApexPlayer, fetchApexPredator, rankedMapAt } from "./apex.js";
 import { pushLiveActivities, trackLiveSession } from "./live.js";
-import { notifyFollowers } from "./notify.js";
+import { notifyFollowers, notifyGoals } from "./notify.js";
 import { fetchValorantHistory, fetchValorantMatchDetails, fetchValorantPlayer } from "./valorant.js";
 import { isApexAdjustment, nextPollDelay } from "./stats.js";
 
@@ -102,12 +102,14 @@ export async function pollPlayer(env, player) {
       error_count: 0,
     };
     // Live Activity: start one when they start playing, push every new game to it.
-    await trackLiveSession(env, updated, result.state, result.matches, now)
+    await trackLiveSession(env, updated, result.state, result.matches, now, { baseline: !prevState })
       .catch((err) => console.error("live session failed", err));
     if (changed) await pushLiveActivities(env, updated, now).catch((err) => console.error("live activity push failed", err));
     // Favourites: rank changes, streaks and session recaps for the people following them.
     await notifyFollowers(env, updated, prevState, result.state, result.matches, now)
       .catch((err) => console.error("follow notifications failed", err));
+    // Their own rank goal, on the phone that set it.
+    await notifyGoals(env, updated, player.score, now).catch((err) => console.error("goal notification failed", err));
     return updated;
   } catch (err) {
     const errorCount = (player.error_count ?? 0) + 1;

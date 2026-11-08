@@ -279,7 +279,7 @@ class _NotificationsTile extends StatelessWidget {
             children: [
               Icon(Icons.notifications_rounded, color: on ? AppColors.accent : AppColors.textFaint),
               const SizedBox(width: 14),
-              const Expanded(child: Text("Favourites' grind", style: TextStyle(fontWeight: FontWeight.w600))),
+              const Expanded(child: Text('Goals & favourites', style: TextStyle(fontWeight: FontWeight.w600))),
               Switch(
                 value: on,
                 activeThumbColor: AppColors.accent,
@@ -298,8 +298,8 @@ class _NotificationsTile extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Text(
-              'Get a heads-up when a favourite ranks up or down, goes on a win or loss streak, or wraps up a '
-              'session. Star players on their page in Search. '
+              'Get a heads-up when you reach your rank goal, and when a favourite ranks up or down, goes on '
+              'a win or loss streak, or wraps up a session. Star players on their page in Search. '
               '${count == 0 ? 'You have no favourites yet.' : 'Following $count ${count == 1 ? 'player' : 'players'}.'}',
               style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
             ),

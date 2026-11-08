@@ -13,15 +13,17 @@
 // Var:     APNS_TOPIC (the app's bundle id, default phamishan.phamitracker).
 
 import { changes, rankLabel } from "./poller.js";
+import { sessionIdleMs } from "./stats.js";
 
 const MINUTES = 60_000;
 const HOURS = 60 * MINUTES;
 // iOS ends a Live Activity after 8 hours (12 on the lock screen); stop pushing after that.
 export const LIVE_ACTIVITY_MAX_MS = 12 * HOURS;
-// A session ends this long after the last game (or the last time Apex showed them in a match).
-export const SESSION_IDLE_MS = 45 * MINUTES;
-// VALORANT only shows up once a game is recorded; ignore backfilled games older than this.
-const VALORANT_FRESH_MS = 30 * MINUTES;
+// A session ends sessionIdleMs(game) after the last game (or the last time Apex showed them in a
+// match): 45 minutes for Apex, 75 for VALORANT.
+// VALORANT game times are when the game *started*; a game recorded now can be ~45 minutes old.
+// Safety net against games HenrikDev only lists hours later.
+const VALORANT_FRESH_MS = 3 * HOURS;
 
 const HEX_TOKEN = /^[0-9a-f]{32,256}$/;
 
@@ -111,10 +113,13 @@ export function sessionAttributes(player, state) {
  * Called after every poll. Opens a session (and push-starts the activity on subscribed phones)
  * when the player starts playing, and keeps an open session alive while they play.
  */
-export async function trackLiveSession(env, player, state, recorded, now = Date.now()) {
+export async function trackLiveSession(env, player, state, recorded, now = Date.now(), { baseline = false } = {}) {
   const games = recorded.filter((m) => m.kind === "match");
   const inGame = player.game === "apex" && state?.status?.inGame === true;
-  const fresh = player.game === "valorant" ? games.filter((m) => now - m.ts < VALORANT_FRESH_MS) : games;
+  // The first poll after linking backfills VALORANT history: old games, not a session starting.
+  const fresh = player.game === "valorant"
+    ? (baseline ? [] : games.filter((m) => now - m.ts < VALORANT_FRESH_MS))
+    : games;
   if (!inGame && fresh.length === 0) return null;
 
   const session = await env.DB.prepare("SELECT * FROM live_sessions WHERE player_id = ?").bind(player.id).first();
@@ -168,8 +173,12 @@ export async function trackLiveSession(env, player, state, recorded, now = Date.
 /** Cron: close sessions that have gone quiet, and the activities showing them. */
 export async function endIdleSessions(env, now = Date.now()) {
   const idle = (
-    await env.DB.prepare("SELECT * FROM live_sessions WHERE last_activity_at < ?").bind(now - SESSION_IDLE_MS).all()
-  ).results;
+    await env.DB.prepare(
+      "SELECT s.*, p.game FROM live_sessions s JOIN players p ON p.id = s.player_id WHERE s.last_activity_at < ?",
+    )
+      .bind(now - sessionIdleMs("apex"))
+      .all()
+  ).results.filter((session) => now - session.last_activity_at >= sessionIdleMs(session.game));
   for (const session of idle) {
     const player = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(session.player_id).first();
     const activities = (

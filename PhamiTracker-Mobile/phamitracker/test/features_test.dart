@@ -121,6 +121,22 @@ void main() {
     expect(Session.latest(const []), isNull);
   });
 
+  test('VALORANT sessions allow for game length (times are game starts)', () {
+    final t = DateTime(2026, 11, 8, 20);
+    final matches = [
+      _m(t.add(const Duration(minutes: 97)), 18, 1538), // long games: started 50 and 47 minutes apart
+      _m(t.add(const Duration(minutes: 50)), -21, 1520),
+      _m(t, 17, 1541),
+      _m(t.subtract(const Duration(hours: 5)), 20, 1524), // an earlier evening
+    ];
+    final s = Session.latest(matches, game: Game.valorant)!;
+    expect(s.matches.length, 3);
+    expect(s.isOver(t.add(const Duration(minutes: 97 + 100))), isFalse);
+    expect(s.isOver(t.add(const Duration(minutes: 97 + 120))), isTrue);
+    // The same games as Apex (45-minute gaps) would split.
+    expect(Session.latest(matches)!.matches.length, 1);
+  });
+
   test('summary parses split, predator and legends', () {
     final s = PlayerSummary.fromJson(jsonDecode(jsonEncode(_summary())) as Map<String, dynamic>);
     expect(s.predator!.cutoff, 24_000);

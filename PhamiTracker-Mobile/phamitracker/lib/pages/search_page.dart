@@ -14,6 +14,7 @@ import '../widgets/performance_card.dart';
 import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
 import 'home_page.dart';
+import 'compare_page.dart';
 import 'link_account_page.dart';
 import 'match_page.dart';
 
@@ -270,6 +271,15 @@ class _PlayerPageState extends State<PlayerPage> {
       appBar: AppBar(
         title: Text(s.name),
         actions: [
+          // Head to head: needs your own account for this game.
+          if (state.summaries[game] case final mine? when state.accounts[game] != null)
+            IconButton(
+              tooltip: 'Compare with you',
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ComparePage(me: mine, myName: state.accounts[game]!.displayName, them: s),
+              )),
+              icon: const Icon(Icons.compare_arrows_rounded, color: AppColors.textDim),
+            ),
           IconButton(
             tooltip: favorite ? 'Remove from favourites' : 'Add to favourites',
             onPressed: () => state.toggleFavorite(widget.query.withDisplayName(s.name)),

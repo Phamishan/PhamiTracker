@@ -142,12 +142,19 @@ class TrackerApi {
   Future<void> endLiveActivity(String playerId, String token) =>
       _send('DELETE', '/v1/players/$playerId/live-activity/$token');
 
-  /// Notifications about these favourites go to this phone (replaces its previous list).
-  Future<void> registerNotifications(String token, {required bool sandbox, required List<PlayerQuery> follows}) =>
+  /// Notifications about these favourites, and about reaching these goals, go to this phone
+  /// (replaces its previous lists). [goals] are {playerId, label, targetScore}.
+  Future<void> registerNotifications(
+    String token, {
+    required bool sandbox,
+    required List<PlayerQuery> follows,
+    List<Map<String, Object>> goals = const [],
+  }) =>
       _send('POST', '/v1/notifications', body: {
         'token': token,
         'sandbox': sandbox,
         'follows': [for (final q in follows) q.toJson()],
+        'goals': goals,
       });
 
   Future<void> unregisterNotifications(String token) => _send('DELETE', '/v1/notifications/$token');

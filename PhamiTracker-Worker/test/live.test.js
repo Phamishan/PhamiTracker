@@ -106,7 +106,10 @@ test("VALORANT: a fresh ranked game starts it; backfilled old games don't", asyn
   await subscribeLiveStart(env, { token: token("c"), players: ["p1"] }, t0);
   const old = { ts: t0 - 5 * 60 * MIN, delta: 18, kind: "match", detail: {} };
   assert.equal(await trackLiveSession(env, player(DB), {}, [old], t0), null);
-  const fresh = { ts: t0 - 2 * MIN, delta: 21, kind: "match", detail: { won: true } };
+  // Riot dates games by their start: a game seen now started ~40 minutes ago.
+  const fresh = { ts: t0 - 40 * MIN, delta: 21, kind: "match", detail: { won: true } };
+  // The first poll after linking is history, not a session.
+  assert.equal(await trackLiveSession(env, player(DB), {}, [fresh], t0, { baseline: true }), null);
   assert.equal(await trackLiveSession(env, player(DB), {}, [fresh], t0), "started");
   const aps = pushes[0].body.aps;
   assert.equal(aps.attributes.player, "Phami#EUW");
@@ -196,4 +199,17 @@ test("a double-tapped link creates one player and both requests succeed", async 
   assert.deepEqual([a.status, b.status], [201, 201]);
   assert.equal((await a.json()).player.id, (await b.json()).player.id);
   assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM players").get().n, 1);
+});
+
+test("Live Activity sessions: Apex ends 45 minutes after the last game, VALORANT 75", async (t) => {
+  const { endIdleSessions } = await import("../src/live.js");
+  const { env, DB, pushes } = setup({ game: "valorant", score: 1542 });
+  mockApns(t, pushes);
+  DB.raw.prepare("INSERT INTO live_sessions (player_id, started_at, start_score, last_activity_at) VALUES ('p1', ?, 1500, ?)").run(t0, t0);
+  assert.equal(await endIdleSessions(env, t0 + 50 * MIN), 0);
+  assert.equal(await endIdleSessions(env, t0 + 76 * MIN), 1);
+
+  const apex = setup();
+  apex.DB.raw.prepare("INSERT INTO live_sessions (player_id, started_at, start_score, last_activity_at) VALUES ('p1', ?, 10000, ?)").run(t0, t0);
+  assert.equal(await endIdleSessions(apex.env, t0 + 50 * MIN), 1);
 });

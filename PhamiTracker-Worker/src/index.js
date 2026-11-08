@@ -6,7 +6,9 @@
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   DELETE /v1/players/:id             stop tracking
-//   POST   /v1/notifications           push notifications about favourites  {token, sandbox?, follows: [{game, name, tag?, platform, region?}]}
+//   POST   /v1/notifications           push notifications about favourites and own goals
+//                                      {token, sandbox?, follows: [{game, name, tag?, platform, region?}],
+//                                       goals: [{playerId, label, targetScore}]}
 //   DELETE /v1/notifications/:token    notifications turned off
 //   POST   /v1/live/subscribe          auto Live Activities: push-to-start token  {token, sandbox?, players: [ids]}
 //   DELETE /v1/live/subscribe/:token   setting turned off
@@ -140,6 +142,7 @@ async function route(request, env, ctx) {
       env.DB.prepare("DELETE FROM live_subscriptions WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM live_sessions WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM follows WHERE player_id = ?").bind(player.id),
+      env.DB.prepare("DELETE FROM goals WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM matches WHERE player_id = ?").bind(player.id),
       env.DB.prepare("DELETE FROM players WHERE id = ?").bind(player.id),
     ]);
@@ -379,7 +382,12 @@ async function registerNotifications(request, env) {
     if (!found.player.state) await pollPlayer(env, found.player).catch(() => null);
     ids.push(found.player.id);
   }
-  const result = await registerDevice(env, { token: body.token, sandbox: body.sandbox, players: [...new Set(ids)] });
+  const result = await registerDevice(env, {
+    token: body.token,
+    sandbox: body.sandbox,
+    players: [...new Set(ids)],
+    goals: (Array.isArray(body.goals) ? body.goals : []).slice(0, 4),
+  });
   return result.error ? fail(400, result.error) : json({ ...result, missing });
 }
 
