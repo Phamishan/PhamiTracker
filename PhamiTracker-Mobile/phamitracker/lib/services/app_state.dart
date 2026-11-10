@@ -60,6 +60,8 @@ class AppState extends ChangeNotifier {
   Timer? _timer;
   final Map<Game, ClimbRange> _climbRange = {};
   final Map<(Game, ClimbRange), List<DayPoint>> _climb = {};
+  final Map<Game, StatsRange> _statsRange = {};
+  final Map<Game, Breakdown> _allTime = {};
 
   Game get game => _game;
   TrackedAccount? get account => accounts[_game];
@@ -77,6 +79,37 @@ class AppState extends ChangeNotifier {
     return range == ClimbRange.twoWeeks
         ? summaries[game]?.history
         : _climb[(game, range)];
+  }
+
+  StatsRange statsRange(Game game) => _statsRange[game] ?? StatsRange.split;
+
+  /// By Legend/Agent and By Map in the chosen range (null while "All" loads). This split/act
+  /// comes with the summary; all time is fetched on demand.
+  Breakdown? breakdown(Game game) {
+    final summary = summaries[game];
+    if (summary == null) return null;
+    return statsRange(game) == StatsRange.split
+        ? Breakdown(maps: summary.maps, characters: summary.characters)
+        : _allTime[game];
+  }
+
+  Future<void> setStatsRange(Game game, StatsRange range) async {
+    _statsRange[game] = range;
+    await _prefs.setString('stats.${game.id}', range.name);
+    notifyListeners();
+    await _loadBreakdown(game);
+  }
+
+  Future<void> _loadBreakdown(Game game, {bool force = false}) async {
+    final account = accounts[game];
+    if (account == null || statsRange(game) != StatsRange.all) return;
+    if (!force && _allTime.containsKey(game)) return;
+    try {
+      _allTime[game] = await api.breakdown(account.playerId);
+      notifyListeners();
+    } on TrackerApiException {
+      // Keep whatever we had; the cards show a loading state if there's nothing.
+    }
   }
 
   Future<void> setClimbRange(Game game, ClimbRange range) async {
@@ -110,6 +143,7 @@ class AppState extends ChangeNotifier {
       _climbRange[game] = ClimbRange.fromName(
         _prefs.getString('climb.${game.id}'),
       );
+      _statsRange[game] = StatsRange.fromName(_prefs.getString('stats.${game.id}'));
       final goal = _prefs.getString('goal.${game.id}');
       if (goal != null)
         goals[game] = RankGoal.fromJson(
@@ -336,13 +370,14 @@ class AppState extends ChangeNotifier {
     // Longer chart ranges barely move minute to minute: load them once here, and again only
     // on pull-to-refresh ([refreshAll]).
     if (account != null) unawaited(_loadClimb(game));
+    if (account != null) unawaited(_loadBreakdown(game));
     notifyListeners();
     _syncWidgets();
   }
 
   /// Pull-to-refresh: everything, including the selected chart range.
   Future<void> refreshAll() async {
-    await Future.wait([refresh(), _loadClimb(_game, force: true)]);
+    await Future.wait([refresh(), _loadClimb(_game, force: true), _loadBreakdown(_game, force: true)]);
   }
 
   Future<void> _loadApexMaps() async {
@@ -371,6 +406,7 @@ class AppState extends ChangeNotifier {
     accounts[game] = account;
     summaries.remove(game);
     _climb.removeWhere((key, _) => key.$1 == game);
+    _allTime.remove(game);
     errors.remove(game);
     if (previous?.playerId != account.playerId) {
       goals.remove(game);
@@ -388,6 +424,7 @@ class AppState extends ChangeNotifier {
     final account = accounts.remove(game);
     summaries.remove(game);
     _climb.removeWhere((key, _) => key.$1 == game);
+    _allTime.remove(game);
     goals.remove(game);
     errors.remove(game);
     await _prefs.remove('account.${game.id}');

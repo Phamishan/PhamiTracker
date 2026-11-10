@@ -37,6 +37,8 @@ class SettingsPage extends StatelessWidget {
               children: [
                 _Bullet(Icons.bolt_rounded, 'RP Today', 'Points won or lost today, plus matches and W/L.'),
                 SizedBox(height: 14),
+                _Bullet(Icons.sports_esports_rounded, 'Last Session', 'Your latest session: points, games, W/L, best and worst game.'),
+                SizedBox(height: 14),
                 _Bullet(Icons.flag_rounded, 'Rank Goal', 'Your goal rank and how far you are from it.'),
                 SizedBox(height: 14),
                 _Bullet(Icons.show_chart_rounded, 'Climb', 'Your RP/RR over all time, 3 months, 1 month, 14 days or 7 days, with your last 5 matches on the large size.'),

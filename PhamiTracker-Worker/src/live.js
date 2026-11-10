@@ -7,13 +7,15 @@
 //     game after a break) it opens a session and push-starts the activity on those phones.
 //  3. The phone hands back the activity's own push token (POST /v1/players/:id/live-activity);
 //     every game the poller records is pushed to it.
-//  4. 45 minutes after the last game the session ends and the activity is closed.
+//  4. 45 minutes after the last game (75 for VALORANT) the session ends and the activity is
+//     closed. A game that comes a session gap after the one before it (sessionGapMs, the app's
+//     rule) closes it and starts a new one, even if they were back in a match before it timed out.
 //
 // Secrets: APNS_KEY (the .p8 file's contents), APNS_KEY_ID, APNS_TEAM_ID.
 // Var:     APNS_TOPIC (the app's bundle id, default phamishan.phamitracker).
 
 import { changes, rankLabel } from "./poller.js";
-import { sessionIdleMs } from "./stats.js";
+import { sessionGapMs, sessionIdleMs } from "./stats.js";
 
 const MINUTES = 60_000;
 const HOURS = 60 * MINUTES;
@@ -124,8 +126,15 @@ export async function trackLiveSession(env, player, state, recorded, now = Date.
 
   const session = await env.DB.prepare("SELECT * FROM live_sessions WHERE player_id = ?").bind(player.id).first();
   if (session) {
-    await env.DB.prepare("UPDATE live_sessions SET last_activity_at = ? WHERE player_id = ?").bind(now, player.id).run();
-    return "continued";
+    if (!(await isNewSession(env, player, session, fresh))) {
+      await env.DB.prepare("UPDATE live_sessions SET last_activity_at = ? WHERE player_id = ?").bind(now, player.id).run();
+      return "continued";
+    }
+    // The new game came a session gap after the last one: the app counts two sessions, so the lock
+    // screen does too. Close the old one with its own numbers and start a new one below.
+    const before = Math.min(...fresh.map((m) => m.ts));
+    const oldScore = (player.score ?? 0) - fresh.reduce((sum, m) => sum + m.delta, 0);
+    await closeSession(env, { ...player, score: oldScore }, session, now, { before, dismissNow: true });
   }
 
   const subscriptions = (
@@ -181,32 +190,54 @@ export async function endIdleSessions(env, now = Date.now()) {
   ).results.filter((session) => now - session.last_activity_at >= sessionIdleMs(session.game));
   for (const session of idle) {
     const player = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(session.player_id).first();
-    const activities = (
-      await env.DB.prepare("SELECT * FROM live_activities WHERE player_id = ?").bind(session.player_id).all()
-    ).results;
-    if (player && activities.length && liveActivitiesEnabled(env)) {
-      const games = (
-        await env.DB.prepare("SELECT ts, delta, kind, detail FROM matches WHERE player_id = ? AND ts >= ? ORDER BY ts")
-          .bind(player.id, session.started_at)
-          .all()
-      ).results;
-      const payload = {
-        aps: {
-          timestamp: Math.floor(now / 1000),
-          event: "end",
-          "content-state": sessionState(player, session.start_score, games, now),
-          // Leave the final numbers up for a bit, then clear it.
-          "dismissal-date": Math.floor((now + 15 * MINUTES) / 1000),
-        },
-      };
-      for (const activity of activities) await sendApns(env, activity, payload, now).catch(() => null);
-    }
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM live_activities WHERE player_id = ?").bind(session.player_id),
-      env.DB.prepare("DELETE FROM live_sessions WHERE player_id = ?").bind(session.player_id),
-    ]);
+    await closeSession(env, player, session, now);
   }
   return idle.length;
+}
+
+/** Do these new games come a session gap (sessionGapMs) after the open session's last game? */
+async function isNewSession(env, player, session, fresh) {
+  if (fresh.length === 0) return false;
+  const first = Math.min(...fresh.map((m) => m.ts));
+  const last = await env.DB.prepare(
+    "SELECT MAX(ts) AS ts FROM matches WHERE player_id = ? AND kind = 'match' AND ts >= ? AND ts < ?",
+  )
+    .bind(player.id, session.started_at, first)
+    .first();
+  return last?.ts != null && first - last.ts >= sessionGapMs(player.game);
+}
+
+/**
+ * Ends a session: pushes its final numbers (games before `before`) to the activities showing it,
+ * then forgets both. `dismissNow` clears it straight away, for when a new session replaces it.
+ */
+async function closeSession(env, player, session, now, { before = Number.MAX_SAFE_INTEGER, dismissNow = false } = {}) {
+  const activities = (
+    await env.DB.prepare("SELECT * FROM live_activities WHERE player_id = ?").bind(session.player_id).all()
+  ).results;
+  if (player && activities.length && liveActivitiesEnabled(env)) {
+    const games = (
+      await env.DB.prepare(
+        "SELECT ts, delta, kind, detail FROM matches WHERE player_id = ? AND ts >= ? AND ts < ? ORDER BY ts",
+      )
+        .bind(player.id, session.started_at, before)
+        .all()
+    ).results;
+    const payload = {
+      aps: {
+        timestamp: Math.floor(now / 1000),
+        event: "end",
+        "content-state": sessionState(player, session.start_score, games, now),
+        // Leave the final numbers up for a bit, then clear it.
+        "dismissal-date": Math.floor((dismissNow ? now : now + 15 * MINUTES) / 1000),
+      },
+    };
+    for (const activity of activities) await sendApns(env, activity, payload, now).catch(() => null);
+  }
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM live_activities WHERE player_id = ?").bind(session.player_id),
+    env.DB.prepare("DELETE FROM live_sessions WHERE player_id = ?").bind(session.player_id),
+  ]);
 }
 
 /** New games: push the numbers to every activity showing this player. */

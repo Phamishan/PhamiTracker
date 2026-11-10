@@ -133,6 +133,48 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
 }
 
 /// Thin progress bar on a dark track (goal progress, map rotation time).
+/// A row of options with the selected one raised (the climb chart's range, By Map's range).
+class SegmentToggle<T> extends StatelessWidget {
+  const SegmentToggle({super.key, required this.values, required this.selected, required this.label, required this.onChanged});
+
+  final List<T> values;
+  final T selected;
+  final String Function(T) label;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          for (final v in values)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onChanged(v),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: v == selected ? AppColors.surfaceHigh : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    label(v).toUpperCase(),
+                    style: AppText.label(size: 11, color: v == selected ? AppColors.text : AppColors.textFaint),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class ProgressBar extends StatelessWidget {
   const ProgressBar({super.key, required this.value, this.color = AppColors.goal, this.height = 8});
 

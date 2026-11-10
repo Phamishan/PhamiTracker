@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/account.dart';
 import '../models/game.dart';
+import '../models/insights.dart';
 import '../models/ranks.dart';
 import '../models/summary.dart';
 import 'tracker_api.dart';
@@ -62,6 +63,18 @@ class WidgetBridge {
         for (final d in s.history.skip(s.history.length > 7 ? s.history.length - 7 : 0))
           {'day': d.day.toIso8601String().substring(0, 10), 'score': d.score, 'delta': d.delta},
       ],
+      if (Session.latest(s.matches, game: s.game) case final session?)
+        'session': {
+          'games': session.matches.length,
+          'wins': session.wins,
+          'losses': session.losses,
+          'net': session.net,
+          'best': session.best,
+          'worst': session.worst,
+          'start': session.start.millisecondsSinceEpoch,
+          'end': session.end.millisecondsSinceEpoch,
+          'series': [for (var i = 0, total = 0; i < session.matches.length; i++) total += session.matches[i].delta],
+        },
       'matches': [
         for (final m in s.matches.take(5))
           {

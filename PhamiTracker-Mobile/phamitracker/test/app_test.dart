@@ -274,7 +274,7 @@ void main() {
     await settle();
     final row = find.text('JETT · ASCENT');
     await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+    await tester.ensureVisible(row);
     await settle();
     await tester.tap(row);
     await settle();

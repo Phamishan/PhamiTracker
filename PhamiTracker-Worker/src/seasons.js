@@ -76,8 +76,33 @@ export async function fetchApexSeason() {
   };
 }
 
+/**
+ * Dates read off the game, set in wrangler.toml ([vars] APEX_SEASON / APEX_SPLIT /
+ * APEX_SPLIT_START / APEX_SPLIT_END). They win over the scraped ones until the split ends, then
+ * scraping takes over again. For when apexseasons.online is behind or wrong.
+ */
+export function applySeasonOverride(season, env, now = Date.now()) {
+  const end = Date.parse(env.APEX_SPLIT_END ?? "");
+  if (!Number.isFinite(end) || end <= now) return season;
+  const start = Date.parse(env.APEX_SPLIT_START ?? "");
+  const split = Number(env.APEX_SPLIT);
+  return {
+    ...(season ?? {}),
+    season: env.APEX_SEASON || season?.season || null,
+    split: Number.isFinite(split) && split > 0 ? split : season?.split ?? null,
+    splitStart: Number.isFinite(start) ? start : season?.splitStart ?? null,
+    splitEnd: end,
+    estimated: false,
+    source: "wrangler.toml",
+  };
+}
+
 /** Cached season info. Keeps serving the last good copy if the site is down or changes. */
 export async function getApexSeason(env, now = Date.now()) {
+  return applySeasonOverride(await scrapedApexSeason(env, now), env, now);
+}
+
+async function scrapedApexSeason(env, now) {
   const cached = await env.DB.prepare(`SELECT value, expires_at FROM cache WHERE key = '${CACHE_KEY}'`).first();
   const previous = cached ? JSON.parse(cached.value) : null;
   if (previous && cached.expires_at > now) return previous;

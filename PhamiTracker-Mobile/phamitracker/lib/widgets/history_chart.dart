@@ -47,7 +47,7 @@ class HistoryChart extends StatelessWidget {
                 Expanded(
                   child: switch (onRange) {
                     null => Text('LAST 14 DAYS', style: AppText.label()),
-                    final onRange => _RangeToggle(range: range, onChanged: onRange),
+                    final onRange => SegmentToggle(values: ClimbRange.values, selected: range, label: (r) => r.label, onChanged: onRange),
                   },
                 ),
                 const SizedBox(width: 10),
@@ -65,45 +65,6 @@ class HistoryChart extends StatelessWidget {
               final h => _Chart(game: game, history: h, goal: goal, range: range),
             },
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RangeToggle extends StatelessWidget {
-  const _RangeToggle({required this.range, required this.onChanged});
-
-  final ClimbRange range;
-  final ValueChanged<ClimbRange> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(10)),
-      child: Row(
-        children: [
-          for (final r in ClimbRange.values)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(r),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: r == range ? AppColors.surfaceHigh : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    r.label.toUpperCase(),
-                    style: AppText.label(size: 11, color: r == range ? AppColors.text : AppColors.textFaint),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

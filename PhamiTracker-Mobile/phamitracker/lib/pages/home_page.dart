@@ -155,9 +155,9 @@ class _Dashboard extends StatelessWidget {
         GoalCard(game: game, goal: state.goal, summary: summary, onTap: () => showGoalSheet(context, game)),
         const SizedBox(height: 12),
         TodayTile(game: game, today: summary?.today ?? const TodayStats()),
-        if (summary != null && Session.latest(summary.matches, game: game) != null) ...[
+        if (Session.all(summary?.matches ?? const [], game: game) case final sessions when sessions.isNotEmpty) ...[
           const SizedBox(height: 12),
-          SessionCard(game: game, session: Session.latest(summary.matches, game: game)!, player: account.displayName),
+          SessionsCard(game: game, sessions: sessions, player: account.displayName),
         ],
         SectionTitle(
           summary == null || summary.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${summary.matches.length}',
@@ -194,13 +194,22 @@ class _Dashboard extends StatelessWidget {
           SectionTitle('Last ${previous.noun}'),
           SplitRecapCard(game: game, period: previous, player: account.displayName, finished: true),
         ],
-        if (summary != null && summary.characters.isNotEmpty) ...[
+        // One range for both cards, so they always add up the same games.
+        if (summary != null && (summary.characters.isNotEmpty || summary.maps.isNotEmpty)) ...[
           SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
-          MapStatsCard(game: game, maps: summary.characters),
-        ],
-        if (summary != null && summary.maps.isNotEmpty) ...[
+          MapStatsCard(
+            game: game,
+            maps: state.breakdown(game)?.characters,
+            range: state.statsRange(game),
+            onRange: (range) => state.setStatsRange(game, range),
+          ),
           const SectionTitle('By Map'),
-          MapStatsCard(game: game, maps: summary.maps),
+          MapStatsCard(
+            game: game,
+            maps: state.breakdown(game)?.maps,
+            range: state.statsRange(game),
+            onRange: (range) => state.setStatsRange(game, range),
+          ),
         ],
       ],
     );

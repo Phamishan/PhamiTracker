@@ -146,14 +146,122 @@ class _ShareHeader extends StatelessWidget {
   }
 }
 
+/// Every session in the match list, newest first: swipe (or tap the arrows) to go back in time.
+class SessionsCard extends StatefulWidget {
+  const SessionsCard({super.key, required this.game, required this.sessions, required this.player, this.now});
+
+  final Game game;
+
+  /// Newest first (Session.all).
+  final List<Session> sessions;
+  final String player;
+  final DateTime? now;
+
+  @override
+  State<SessionsCard> createState() => _SessionsCardState();
+}
+
+class _SessionsCardState extends State<SessionsCard> {
+  int _index = 0;
+  bool _back = true;
+
+  void _go(int index) {
+    if (index < 0 || index >= widget.sessions.length) return;
+    setState(() {
+      _back = index > _index;
+      _index = index;
+    });
+  }
+
+  @override
+  void didUpdateWidget(SessionsCard old) {
+    super.didUpdateWidget(old);
+    // A new game can start a new session; stay in range and keep showing the latest on refresh.
+    if (_index >= widget.sessions.length || widget.sessions.length != old.sessions.length) _index = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.sessions.length;
+    final i = _index.clamp(0, count - 1);
+    final card = SessionCard(
+      key: ValueKey(widget.sessions[i].start),
+      game: widget.game,
+      session: widget.sessions[i],
+      player: widget.player,
+      now: widget.now,
+      title: i == 0 ? null : 'Earlier session',
+    );
+    return Column(
+      children: [
+        GestureDetector(
+          // Swipe left for older sessions, right for newer.
+          onHorizontalDragEnd: (d) {
+            final v = d.primaryVelocity ?? 0;
+            if (v < -200) _go(i + 1);
+            if (v > 200) _go(i - 1);
+          },
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) {
+                final incoming = child.key == card.key;
+                final dx = (_back ? 1.0 : -1.0) * (incoming ? 0.25 : -0.25);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+              child: card,
+            ),
+          ),
+        ),
+        if (count > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Newer session',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: i > 0 ? () => _go(i - 1) : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  color: AppColors.textDim,
+                ),
+                Text('${i + 1} / $count', style: AppText.label(size: 10, color: AppColors.textFaint)),
+                IconButton(
+                  tooltip: 'Older session',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: i < count - 1 ? () => _go(i + 1) : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                  color: AppColors.textDim,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// "Last Session" / "Current Session": games played close together, with a share button.
 class SessionCard extends StatelessWidget {
-  const SessionCard({super.key, required this.game, required this.session, required this.player, this.now});
+  const SessionCard({super.key, required this.game, required this.session, required this.player, this.now, this.title});
 
   final Game game;
   final Session session;
   final String player;
   final DateTime? now;
+
+  /// Overrides "Last session" / "Current session" (older sessions in [SessionsCard]).
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +275,7 @@ class SessionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ShareHeader(game: game, player: player, title: over ? 'Last session' : 'Current session'),
+            _ShareHeader(game: game, player: player, title: title ?? (over ? 'Last session' : 'Current session')),
             const SizedBox(height: 14),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,

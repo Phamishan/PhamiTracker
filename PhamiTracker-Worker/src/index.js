@@ -5,6 +5,7 @@
 //   GET    /v1/players/:id             dashboard summary  ?tzOffset=<min east of UTC>&days=&refresh=1
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
+//   GET    /v1/players/:id/breakdown   By Legend/Agent and By Map over every recorded game
 //   DELETE /v1/players/:id             stop tracking
 //   POST   /v1/notifications           push notifications about favourites and own goals
 //                                      {token, sandbox?, follows: [{game, name, tag?, platform, region?}],
@@ -44,7 +45,7 @@ import { registerDevice, unregisterDevice } from "./notify.js";
 import { currentPeriod } from "./periods.js";
 import { claimPoll, getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { getApexSeason } from "./seasons.js";
-import { characterStats, periodStats, summarize } from "./stats.js";
+import { characterStats, latestSession, mapStats, periodStats, summarize } from "./stats.js";
 
 const DAY = 86_400_000;
 // An app/widget asking for data more than this long after the last poll triggers a live poll.
@@ -159,7 +160,7 @@ async function route(request, env, ctx) {
     }
     return fail(404, "Not found");
   }
-  if (request.method !== "GET" || parts.length > 4 || (parts[3] && !["widget", "history"].includes(parts[3]))) {
+  if (request.method !== "GET" || parts.length > 4 || (parts[3] && !["widget", "history", "breakdown"].includes(parts[3]))) {
     return fail(404, "Not found");
   }
 
@@ -167,6 +168,7 @@ async function route(request, env, ctx) {
   const widget = parts[3] === "widget";
   const tzOffset = clamp(Number(url.searchParams.get("tzOffset")) || 0, -14 * 60, 14 * 60);
   if (parts[3] === "history") return history(env, player, url, { now, tzOffset });
+  if (parts[3] === "breakdown") return breakdown(env, player);
   const days = widget ? 7 : clamp(Number(url.searchParams.get("days")) || 14, 1, 60);
 
   // Opening the app or a widget refreshing keeps the player "active" for the poller, and gets
@@ -215,7 +217,8 @@ async function route(request, env, ctx) {
     await env.DB.prepare(
       "SELECT ts, delta, score_after, kind, detail, external_id FROM matches WHERE player_id = ? ORDER BY ts DESC LIMIT ?",
     )
-      .bind(player.id, widget ? 5 : 100)
+      // The widget shows 5, but needs enough to cover the last session.
+      .bind(player.id, widget ? 50 : 100)
       .all()
   ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
   const matches = (limit) =>
@@ -227,7 +230,7 @@ async function route(request, env, ctx) {
       kind: row.kind,
       ...row.detail,
     }));
-  if (widget) return json({ ...base, matches: matches(5) });
+  if (widget) return json({ ...base, matches: matches(5), session: latestSession(recent, fresh.game, now) });
 
   // Split/act recap and records, plus the one before it for a couple of weeks after a reset.
   const period = await currentPeriod(env, fresh.game, now, season).catch(() => null);
@@ -255,7 +258,8 @@ async function route(request, env, ctx) {
     ...base,
     level: state?.level ?? null,
     banner: state?.banner ?? null,
-    maps: stats.maps,
+    // Both cover the current split/act (the last 14 days until it has games), so they add up the same.
+    maps: mapStats(inCurrent.length ? inCurrent : rows),
     characters: characterStats(inCurrent.length ? inCurrent : rows),
     split,
     previousSplit,
@@ -263,6 +267,16 @@ async function route(request, env, ctx) {
     matches: matches(100),
     nextPollAt: fresh.next_poll_at,
   });
+}
+
+/** By Legend/Agent and By Map over every game since the account was linked (the "All" option). */
+async function breakdown(env, player) {
+  const rows = (
+    await env.DB.prepare("SELECT delta, kind, detail FROM matches WHERE player_id = ? AND kind = 'match'")
+      .bind(player.id)
+      .all()
+  ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
+  return json({ games: rows.length, maps: mapStats(rows), characters: characterStats(rows) });
 }
 
 /** Daily scores for the climb chart. `days=0` means everything since the account was linked. */

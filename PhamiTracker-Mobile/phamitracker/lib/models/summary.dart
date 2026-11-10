@@ -2,7 +2,8 @@ import 'game.dart';
 import 'insights.dart';
 
 int? _int(Object? v) => v is num ? v.toInt() : null;
-DateTime? _time(Object? v) => v is num ? DateTime.fromMillisecondsSinceEpoch(v.toInt()) : null;
+DateTime? _time(Object? v) =>
+    v is num ? DateTime.fromMillisecondsSinceEpoch(v.toInt()) : null;
 
 /// What the worker knows about a player: rank, today's numbers, history and recent matches.
 class PlayerSummary {
@@ -73,20 +74,31 @@ class PlayerSummary {
     final tag = player['tag'] as String?;
     return PlayerSummary(
       game: game,
-      name: tag == null || tag.isEmpty ? '${player['name']}' : '${player['name']}#$tag',
+      name: tag == null || tag.isEmpty
+          ? '${player['name']}'
+          : '${player['name']}#$tag',
       score: _int(json['score']),
       rankLabel: json['rankLabel'] as String?,
-      rank: RankInfo.fromJson(json['rank'] as Map<String, dynamic>? ?? const {}),
-      status: PlayerStatus.fromJson(json['status'] as Map<String, dynamic>? ?? const {}),
-      today: TodayStats.fromJson(json['today'] as Map<String, dynamic>? ?? const {}),
+      rank: RankInfo.fromJson(
+        json['rank'] as Map<String, dynamic>? ?? const {},
+      ),
+      status: PlayerStatus.fromJson(
+        json['status'] as Map<String, dynamic>? ?? const {},
+      ),
+      today: TodayStats.fromJson(
+        json['today'] as Map<String, dynamic>? ?? const {},
+      ),
       history: [
-        for (final d in (json['history'] as List? ?? const [])) DayPoint.fromJson(d as Map<String, dynamic>),
+        for (final d in (json['history'] as List? ?? const []))
+          DayPoint.fromJson(d as Map<String, dynamic>),
       ],
       maps: [
-        for (final m in (json['maps'] as List? ?? const [])) MapStat.fromJson(m as Map<String, dynamic>),
+        for (final m in (json['maps'] as List? ?? const []))
+          MapStat.fromJson(m as Map<String, dynamic>),
       ],
       matches: [
-        for (final m in (json['matches'] as List? ?? const [])) MatchEntry.fromJson(m as Map<String, dynamic>),
+        for (final m in (json['matches'] as List? ?? const []))
+          MatchEntry.fromJson(m as Map<String, dynamic>),
       ],
       polledAt: _time(json['polledAt']),
       serverTime: _time(json['serverTime']) ?? DateTime.now(),
@@ -95,7 +107,8 @@ class PlayerSummary {
       season: SeasonInfo.tryParse(json['season']),
       tracked: json['tracked'] != false,
       characters: [
-        for (final c in (json['characters'] as List? ?? const [])) MapStat.fromJson(c as Map<String, dynamic>),
+        for (final c in (json['characters'] as List? ?? const []))
+          MapStat.fromJson(c as Map<String, dynamic>),
       ],
       predator: PredatorInfo.tryParse(json['predator']),
       split: PeriodStats.tryParse(json['split']),
@@ -105,7 +118,14 @@ class PlayerSummary {
 }
 
 class RankInfo {
-  const RankInfo({this.name, this.image, this.rr, this.ladderPos, this.peak, this.gamesNeeded = 0});
+  const RankInfo({
+    this.name,
+    this.image,
+    this.rr,
+    this.ladderPos,
+    this.peak,
+    this.gamesNeeded = 0,
+  });
 
   final String? name;
   final String? image;
@@ -117,17 +137,22 @@ class RankInfo {
   final int gamesNeeded;
 
   factory RankInfo.fromJson(Map<String, dynamic> json) => RankInfo(
-        name: json['name'] as String?,
-        image: json['image'] as String? ?? valorantTierIcon(_int(json['tier'])),
-        rr: _int(json['rr']),
-        ladderPos: _int(json['ladderPos']),
-        peak: json['peak'] as String?,
-        gamesNeeded: _int(json['gamesNeeded']) ?? 0,
-      );
+    name: json['name'] as String?,
+    image: json['image'] as String? ?? valorantTierIcon(_int(json['tier'])),
+    rr: _int(json['rr']),
+    ladderPos: _int(json['ladderPos']),
+    peak: json['peak'] as String?,
+    gamesNeeded: _int(json['gamesNeeded']) ?? 0,
+  );
 }
 
 class PlayerStatus {
-  const PlayerStatus({this.online = false, this.inGame = false, this.text, this.legend});
+  const PlayerStatus({
+    this.online = false,
+    this.inGame = false,
+    this.text,
+    this.legend,
+  });
 
   final bool online;
   final bool inGame;
@@ -135,11 +160,11 @@ class PlayerStatus {
   final String? legend;
 
   factory PlayerStatus.fromJson(Map<String, dynamic> json) => PlayerStatus(
-        online: json['online'] == true,
-        inGame: json['inGame'] == true,
-        text: json['text'] as String?,
-        legend: json['legend'] as String?,
-      );
+    online: json['online'] == true,
+    inGame: json['inGame'] == true,
+    text: json['text'] as String?,
+    legend: json['legend'] as String?,
+  );
 }
 
 class TodayStats {
@@ -164,18 +189,25 @@ class TodayStats {
   final List<int> series;
 
   factory TodayStats.fromJson(Map<String, dynamic> json) => TodayStats(
-        delta: _int(json['delta']) ?? 0,
-        matches: _int(json['matches']) ?? 0,
-        wins: _int(json['wins']) ?? 0,
-        losses: _int(json['losses']) ?? 0,
-        best: _int(json['best']),
-        worst: _int(json['worst']),
-        series: [for (final v in (json['series'] as List? ?? const [])) (v as num).toInt()],
-      );
+    delta: _int(json['delta']) ?? 0,
+    matches: _int(json['matches']) ?? 0,
+    wins: _int(json['wins']) ?? 0,
+    losses: _int(json['losses']) ?? 0,
+    best: _int(json['best']),
+    worst: _int(json['worst']),
+    series: [
+      for (final v in (json['series'] as List? ?? const [])) (v as num).toInt(),
+    ],
+  );
 }
 
 class DayPoint {
-  const DayPoint({required this.day, required this.score, required this.delta, required this.matches});
+  const DayPoint({
+    required this.day,
+    required this.score,
+    required this.delta,
+    required this.matches,
+  });
 
   final DateTime day;
   final int? score;
@@ -183,15 +215,22 @@ class DayPoint {
   final int matches;
 
   factory DayPoint.fromJson(Map<String, dynamic> json) => DayPoint(
-        day: DateTime.parse(json['day'] as String),
-        score: _int(json['score']),
-        delta: _int(json['delta']) ?? 0,
-        matches: _int(json['matches']) ?? 0,
-      );
+    day: DateTime.parse(json['day'] as String),
+    score: _int(json['score']),
+    delta: _int(json['delta']) ?? 0,
+    matches: _int(json['matches']) ?? 0,
+  );
 }
 
 class MapStat {
-  const MapStat({required this.map, required this.matches, required this.delta, required this.wins, this.kills, this.deaths});
+  const MapStat({
+    required this.map,
+    required this.matches,
+    required this.delta,
+    required this.wins,
+    this.kills,
+    this.deaths,
+  });
 
   final String map;
   final int matches;
@@ -202,17 +241,19 @@ class MapStat {
   final int? kills;
   final int? deaths;
 
-  double? get kd => kills == null || deaths == null ? null : kills! / (deaths! == 0 ? 1 : deaths!);
+  double? get kd => kills == null || deaths == null
+      ? null
+      : kills! / (deaths! == 0 ? 1 : deaths!);
 
   factory MapStat.fromJson(Map<String, dynamic> json) => MapStat(
-        // Maps send `map`; legends/agents send `name`.
-        map: (json['map'] ?? json['name']) as String,
-        matches: _int(json['matches']) ?? 0,
-        delta: _int(json['delta']) ?? 0,
-        wins: _int(json['wins']) ?? 0,
-        kills: _int(json['kills']),
-        deaths: _int(json['deaths']),
-      );
+    // Maps send `map`; legends/agents send `name`.
+    map: (json['map'] ?? json['name']) as String,
+    matches: _int(json['matches']) ?? 0,
+    delta: _int(json['delta']) ?? 0,
+    wins: _int(json['wins']) ?? 0,
+    kills: _int(json['kills']),
+    deaths: _int(json['deaths']),
+  );
 }
 
 class MatchEntry {
@@ -265,25 +306,25 @@ class MatchEntry {
   final int? roundsLost;
 
   factory MatchEntry.fromJson(Map<String, dynamic> json) => MatchEntry(
-        time: _time(json['ts']) ?? DateTime.now(),
-        delta: _int(json['delta']) ?? 0,
-        scoreAfter: _int(json['scoreAfter']) ?? 0,
-        isAdjustment: json['kind'] == 'adjust',
-        matchId: json['matchId'] as String?,
-        map: json['map'] as String?,
-        character: (json['legend'] ?? json['agent']) as String?,
-        rank: json['rank'] as String?,
-        kills: _int(json['kills']),
-        deaths: _int(json['deaths']),
-        assists: _int(json['assists']),
-        headshots: _int(json['headshots']),
-        bodyshots: _int(json['bodyshots']),
-        legshots: _int(json['legshots']),
-        combatScore: _int(json['score']),
-        won: json['won'] as bool?,
-        roundsWon: _int(json['roundsWon']),
-        roundsLost: _int(json['roundsLost']),
-      );
+    time: _time(json['ts']) ?? DateTime.now(),
+    delta: _int(json['delta']) ?? 0,
+    scoreAfter: _int(json['scoreAfter']) ?? 0,
+    isAdjustment: json['kind'] == 'adjust',
+    matchId: json['matchId'] as String?,
+    map: json['map'] as String?,
+    character: (json['legend'] ?? json['agent']) as String?,
+    rank: json['rank'] as String?,
+    kills: _int(json['kills']),
+    deaths: _int(json['deaths']),
+    assists: _int(json['assists']),
+    headshots: _int(json['headshots']),
+    bodyshots: _int(json['bodyshots']),
+    legshots: _int(json['legshots']),
+    combatScore: _int(json['score']),
+    won: json['won'] as bool?,
+    roundsWon: _int(json['roundsWon']),
+    roundsLost: _int(json['roundsLost']),
+  );
 }
 
 /// Kills, K/D and the like over the recent matches that have stats.
@@ -304,36 +345,63 @@ class Performance {
   final double? acs;
 
   static Performance? from(List<MatchEntry> matches) {
-    final played = [for (final m in matches) if (!m.isAdjustment) m];
-    final withKills = [for (final m in played) if (m.kills != null) m];
+    final played = [
+      for (final m in matches)
+        if (!m.isAdjustment) m,
+    ];
+    final withKills = [
+      for (final m in played)
+        if (m.kills != null) m,
+    ];
     if (withKills.isEmpty) return null;
 
     int sum(Iterable<MatchEntry> list, int? Function(MatchEntry) pick) =>
         list.fold(0, (total, m) => total + (pick(m) ?? 0));
     double? ratio(num top, num bottom) => bottom > 0 ? top / bottom : null;
 
-    final withDeaths = [for (final m in withKills) if (m.deaths != null) m];
+    final withDeaths = [
+      for (final m in withKills)
+        if (m.deaths != null) m,
+    ];
     final kills = sum(withDeaths, (m) => m.kills);
     final deaths = sum(withDeaths, (m) => m.deaths);
     final assists = sum(withDeaths, (m) => m.assists);
-    final shots = [for (final m in played) if (m.headshots != null) m];
-    final scored = [for (final m in played) if (m.combatScore != null && m.roundsWon != null) m];
+    final shots = [
+      for (final m in played)
+        if (m.headshots != null) m,
+    ];
+    final scored = [
+      for (final m in played)
+        if (m.combatScore != null && m.roundsWon != null) m,
+    ];
     return Performance(
       games: withKills.length,
       kd: withDeaths.isEmpty ? null : ratio(kills, deaths == 0 ? 1 : deaths),
-      kda: withDeaths.isEmpty ? null : ratio(kills + assists, deaths == 0 ? 1 : deaths),
+      kda: withDeaths.isEmpty
+          ? null
+          : ratio(kills + assists, deaths == 0 ? 1 : deaths),
       headshotPct: ratio(
         100 * sum(shots, (m) => m.headshots),
-        sum(shots, (m) => m.headshots) + sum(shots, (m) => m.bodyshots) + sum(shots, (m) => m.legshots),
+        sum(shots, (m) => m.headshots) +
+            sum(shots, (m) => m.bodyshots) +
+            sum(shots, (m) => m.legshots),
       ),
-      acs: ratio(sum(scored, (m) => m.combatScore), sum(scored, (m) => (m.roundsWon ?? 0) + (m.roundsLost ?? 0))),
+      acs: ratio(
+        sum(scored, (m) => m.combatScore),
+        sum(scored, (m) => (m.roundsWon ?? 0) + (m.roundsLost ?? 0)),
+      ),
     );
   }
 }
 
 /// Current Apex season and ranked split (from apexseasons.online, via the worker).
 class SeasonInfo {
-  const SeasonInfo({this.name, this.split, this.splitEnd, this.estimated = true});
+  const SeasonInfo({
+    this.name,
+    this.split,
+    this.splitEnd,
+    this.estimated = true,
+  });
 
   final String? name;
   final int? split;
@@ -356,7 +424,9 @@ class SeasonInfo {
     if (end == null) return null;
     final left = end.difference(now ?? DateTime.now());
     if (left.isNegative) return null;
-    final ends = left.inHours < 24 ? 'Split ends in ${left.inHours}h' : 'Split ends in ${left.inDays}d';
+    final ends = left.inHours < 24
+        ? 'Split ends in ${left.inHours}h'
+        : 'Split ends in ${left.inDays}d';
     if (remaining <= 0) return ends;
     final days = left.inHours < 24 ? 1 : left.inDays;
     return '$ends · ~${(remaining / days).ceil()} $unit/day';
@@ -377,10 +447,10 @@ class MapRotation {
   final RotationPair? ltm;
 
   factory MapRotation.fromJson(Map<String, dynamic> json) => MapRotation(
-        battleRoyale: RotationPair.tryParse(json['battleRoyale']),
-        ranked: RotationPair.tryParse(json['ranked']),
-        ltm: RotationPair.tryParse(json['ltm']),
-      );
+    battleRoyale: RotationPair.tryParse(json['battleRoyale']),
+    ranked: RotationPair.tryParse(json['ranked']),
+    ltm: RotationPair.tryParse(json['ltm']),
+  );
 }
 
 class RotationPair {
@@ -391,12 +461,21 @@ class RotationPair {
 
   static RotationPair? tryParse(Object? json) {
     if (json is! Map<String, dynamic>) return null;
-    return RotationPair(current: RotationSlot.tryParse(json['current']), next: RotationSlot.tryParse(json['next']));
+    return RotationPair(
+      current: RotationSlot.tryParse(json['current']),
+      next: RotationSlot.tryParse(json['next']),
+    );
   }
 }
 
 class RotationSlot {
-  const RotationSlot({required this.map, this.mode, this.image, this.start, this.end});
+  const RotationSlot({
+    required this.map,
+    this.mode,
+    this.image,
+    this.start,
+    this.end,
+  });
 
   final String map;
   final String? mode;
@@ -416,6 +495,43 @@ class RotationSlot {
   }
 }
 
+/// Which games By Legend/Agent and By Map add up: this split/act, or every game since linking.
+enum StatsRange {
+  all,
+  split;
+
+  /// "This split" / "This act" / "All".
+  String label(Game game) => this == all
+      ? 'All'
+      : game == Game.apex
+      ? 'This split'
+      : 'This act';
+
+  static StatsRange fromName(String? name) => StatsRange.values.firstWhere(
+    (r) => r.name == name,
+    orElse: () => StatsRange.split,
+  );
+}
+
+/// By Legend/Agent and By Map over every recorded game (GET /v1/players/:id/breakdown).
+class Breakdown {
+  const Breakdown({this.maps = const [], this.characters = const []});
+
+  final List<MapStat> maps;
+  final List<MapStat> characters;
+
+  factory Breakdown.fromJson(Map<String, dynamic> json) => Breakdown(
+    maps: [
+      for (final m in (json['maps'] as List? ?? const []))
+        MapStat.fromJson(m as Map<String, dynamic>),
+    ],
+    characters: [
+      for (final c in (json['characters'] as List? ?? const []))
+        MapStat.fromJson(c as Map<String, dynamic>),
+    ],
+  );
+}
+
 /// Ranges for the climb chart. [days] 0 means everything since the account was linked.
 enum ClimbRange {
   allTime('All', 0),
@@ -429,6 +545,8 @@ enum ClimbRange {
   final String label;
   final int days;
 
-  static ClimbRange fromName(String? name) =>
-      ClimbRange.values.firstWhere((r) => r.name == name, orElse: () => ClimbRange.twoWeeks);
+  static ClimbRange fromName(String? name) => ClimbRange.values.firstWhere(
+    (r) => r.name == name,
+    orElse: () => ClimbRange.twoWeeks,
+  );
 }

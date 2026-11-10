@@ -5,14 +5,14 @@ import worker from "../src/index.js";
 const DAY = 86_400_000;
 const now = Date.now();
 
-// Answers the two queries the history route makes: the player row and their matches.
+// Answers the player row and their matches (from args[1] on, when the query has a start).
 function fakeDb({ player, matches }) {
   const prepare = (sql) => {
     let args = [];
     const stmt = {
       bind: (...a) => ((args = a), stmt),
       first: async () => (sql.includes("FROM players") ? player : null),
-      all: async () => ({ results: sql.includes("FROM matches") ? matches.filter((m) => m.ts >= args[1]) : [] }),
+      all: async () => ({ results: sql.includes("FROM matches") ? matches.filter((m) => args.length < 2 || m.ts >= args[1]) : [] }),
       run: async () => {},
     };
     return stmt;
@@ -40,6 +40,21 @@ test("history covers the requested range, or everything since linking", async ()
   const all = await call("/v1/players/p1/history?days=0", env);
   assert.equal(all.days, 41);
   assert.equal(all.history[0].score, 10_000);
+});
+
+test("breakdown adds up every recorded game by legend and map", async () => {
+  const player = { id: "p1", game: "apex", score: 10_300, created_at: now - 400 * DAY };
+  const game = (ts, delta, legend, map) => ({ ts, delta, kind: "match", detail: JSON.stringify({ legend, map }) });
+  const matches = [
+    game(now - DAY, 100, "Wraith", "Olympus"),
+    game(now - 200 * DAY, -20, "Wraith", "Olympus"), // long before this split
+    game(now - 300 * DAY, 50, "Bangalore", "World's Edge"),
+  ];
+  const env = { DB: fakeDb({ player, matches }) };
+  const all = await call("/v1/players/p1/breakdown", env);
+  assert.equal(all.games, 3);
+  assert.deepEqual(all.characters[0], { name: "Wraith", matches: 2, delta: 80, wins: 1 });
+  assert.deepEqual(all.maps.map((m) => [m.map, m.matches, m.delta]), [["Olympus", 2, 80], ["World's Edge", 1, 50]]);
 });
 
 test("linking an Apex uid looks the account up by uid, not by name", async (t) => {

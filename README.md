@@ -11,15 +11,15 @@
 🎯 - Rank goal with split countdown & RP/day pace
 📈 - Climb chart (all time, 3 months, 1 month, 14 days, 7 days)
 📜 - Match history (legend/agent, map, K/D/A)
-🗺️ - RP/RR per map, legend and agent
+🗺️ - RP/RR per map, legend and agent (this split/act or all time)
 🧾 - VALORANT match scoreboards & performance (K/D, KDA, HS%, ACS)
 👑 - Apex Predator cutoff
 🏆 - Split/act recap & records
-🎮 - Session recap (shareable)
+🎮 - Session recaps & past sessions (shareable)
 🔄 - Apex map rotation with countdown
 🔍 - Search any player, with favourites
 ⚔️ - Head-to-head against any player
-📱 - Home screen & lock screen widgets (RP Today, Rank Goal, Climb, Map Rotation)
+📱 - Home screen & lock screen widgets (RP Today, Last Session, Rank Goal, Climb, Map Rotation)
 🏝️ - Automatic Live Activity (lock screen & Dynamic Island)
 🔔 - Notifications when you reach your goal, and about your favourites (rank ups, streaks, session recaps)
 🎉 - Rank-up & goal celebrations
@@ -119,3 +119,9 @@
   - Fixed the VALORANT Live Activity not starting by itself
   - Fixed VALORANT session recaps arriving mid-session
   - Fixed long VALORANT sessions being split in two
+- 1.1.1 - 10/11/2026
+  - Added a Last Session widget
+  - Added past sessions
+  - Added All and This split/act to By Legend/Agent and By Map
+  - Fixed the Apex split countdown
+  - Fixed the Live Activity counting two sessions as one

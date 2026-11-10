@@ -116,9 +116,9 @@ class Session {
   final List<MatchEntry> matches;
   final Game game;
 
-  /// How far apart two games' times can be and still be one session. Matches the worker
-  /// (live.js / notify.js): a session ends 45 minutes after the last Apex game, 75 after the last
-  /// VALORANT one. VALORANT times are when a game *started*, so add a game's length (~45 min).
+  /// How far apart two games' times can be and still be one session. Same as the worker's
+  /// sessionGapMs (stats.js), which the Live Activity and Last Session widget use: 45 minutes for
+  /// Apex. VALORANT times are when a game *started*, so 75 minutes plus a game's length (~45).
   static Duration gapFor(Game game) =>
       game == Game.valorant ? const Duration(minutes: 75 + 45) : const Duration(minutes: 45);
 
@@ -134,15 +134,24 @@ class Session {
 
   bool isOver(DateTime now) => now.difference(end) >= gapFor(game);
 
-  /// The most recent session, from a newest-first match list (rank adjustments don't count).
-  static Session? latest(List<MatchEntry> matches, {Game game = Game.apex}) {
+  /// Every session in a match list, newest first (rank adjustments don't count).
+  static List<Session> all(List<MatchEntry> matches, {Game game = Game.apex}) {
     final played = [for (final m in matches) if (!m.isAdjustment) m]..sort((a, b) => a.time.compareTo(b.time));
-    if (played.isEmpty) return null;
     final gap = gapFor(game);
-    var first = played.length - 1;
-    while (first > 0 && played[first].time.difference(played[first - 1].time) < gap) {
-      first--;
+    final sessions = <Session>[];
+    var end = played.length;
+    for (var i = played.length - 1; i >= 0; i--) {
+      if (i == 0 || played[i].time.difference(played[i - 1].time) >= gap) {
+        sessions.add(Session(played.sublist(i, end), game: game));
+        end = i;
+      }
     }
-    return Session(played.sublist(first), game: game);
+    return sessions;
+  }
+
+  /// The most recent session.
+  static Session? latest(List<MatchEntry> matches, {Game game = Game.apex}) {
+    final sessions = all(matches, game: game);
+    return sessions.isEmpty ? null : sessions.first;
   }
 }

@@ -213,3 +213,41 @@ test("Live Activity sessions: Apex ends 45 minutes after the last game, VALORANT
   apex.DB.raw.prepare("INSERT INTO live_sessions (player_id, started_at, start_score, last_activity_at) VALUES ('p1', ?, 10000, ?)").run(t0, t0);
   assert.equal(await endIdleSessions(apex.env, t0 + 50 * MIN), 1);
 });
+
+test("Apex: back in a match before the session timed out, but 48 min since the last game, is a new session", async (t) => {
+  // 9 Nov: games at 18:26 and 19:14; they loaded into the 19:14 match at ~18:55, so the old
+  // session never went idle. The app counts two sessions (45 min rule), so the lock screen must too.
+  const { env, DB, pushes } = setup({ score: 10_186 });
+  mockApns(t, pushes);
+  await subscribeLiveStart(env, { token: token("a"), players: ["p1"] }, t0);
+  const game = (ts, delta) => ({ ts, delta, kind: "match", detail: {} });
+  const record = (m) =>
+    DB.raw.prepare("INSERT INTO matches (player_id, ts, delta, score_after, kind, detail) VALUES ('p1', ?, ?, 0, 'match', '{}')").run(m.ts, m.delta);
+
+  const first = game(t0, 186);
+  record(first);
+  assert.equal(await trackLiveSession(env, player(DB), { status: { inGame: false } }, [first], t0), "started");
+  await registerLiveActivity(env, player(DB), { token: token("b") }, t0 + MIN);
+  // Back in a match 29 minutes later: still the same session.
+  assert.equal(await trackLiveSession(env, player(DB), { status: { inGame: true } }, [], t0 + 29 * MIN), "continued");
+
+  // The match ends 48 minutes after the last game.
+  DB.raw.prepare("UPDATE players SET score = 10193").run();
+  const next = game(t0 + 48 * MIN, 7);
+  record(next);
+  assert.equal(await trackLiveSession(env, player(DB), { status: { inGame: false } }, [next], t0 + 48 * MIN), "started");
+  const end = pushes.find((p) => p.body.aps.event === "end");
+  assert.equal(end.token, token("b"));
+  assert.equal(end.body.aps["content-state"].games, 1);
+  assert.equal(end.body.aps["content-state"].sessionDelta, 186);
+  assert.equal(end.body.aps["dismissal-date"], Math.floor((t0 + 48 * MIN) / 1000));
+  const start = pushes.filter((p) => p.body.aps.event === "start").at(-1).body.aps["content-state"];
+  assert.deepEqual([start.games, start.sessionDelta], [1, 7]);
+  const session = DB.raw.prepare("SELECT * FROM live_sessions").get();
+  assert.deepEqual([session.started_at, session.start_score], [t0 + 48 * MIN, 10_186]);
+
+  // A game 10 minutes later carries on the new session.
+  const third = game(t0 + 58 * MIN, -18);
+  record(third);
+  assert.equal(await trackLiveSession(env, player(DB), { status: { inGame: false } }, [third], t0 + 58 * MIN), "continued");
+});

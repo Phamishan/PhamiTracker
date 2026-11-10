@@ -121,6 +121,94 @@ void main() {
     expect(Session.latest(const []), isNull);
   });
 
+  test("every session, newest first: today's 48-minute break splits the evening in two", () {
+    final t = DateTime(2026, 11, 9, 18, 26);
+    final matches = [
+      _m(t.add(const Duration(minutes: 57)), -18, 1175),
+      _m(t.add(const Duration(minutes: 48)), 7, 1193), // 48 minutes after the last game
+      _m(t, 186, 1186),
+      _m(t.subtract(const Duration(minutes: 23)), -28, 1000),
+      _m(t.subtract(const Duration(hours: 26)), 50, 1028), // yesterday
+    ];
+    final sessions = Session.all(matches);
+    expect([for (final s in sessions) s.matches.length], [2, 2, 1]);
+    expect(sessions.first.net, -11);
+    expect(sessions[1].net, 158);
+    expect(Session.latest(matches)!.start, sessions.first.start);
+    expect(Session.all(const []), isEmpty);
+  });
+
+  testWidgets('the session card swipes back through older sessions', (tester) async {
+    final t = DateTime(2026, 11, 9, 18);
+    final sessions = Session.all([
+      _m(t.add(const Duration(hours: 2)), 40, 1100),
+      _m(t, -30, 1060),
+      _m(t.subtract(const Duration(days: 1)), 90, 1090),
+    ]);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ListView(children: [SessionsCard(game: Game.apex, sessions: sessions, player: 'Phami', now: t.add(const Duration(hours: 4)))]),
+      ),
+    ));
+    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('+40 RP'), findsOneWidget);
+    await tester.fling(find.text('+40 RP'), const Offset(-300, 0), 1000);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('-30 RP'), findsOneWidget);
+    expect(find.text('EARLIER SESSION'), findsOneWidget);
+    await tester.tap(find.byTooltip('Older session'));
+    await tester.pumpAndSettle();
+    expect(find.text('+90 RP'), findsOneWidget);
+    await tester.tap(find.byTooltip('Newer session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Newer session'));
+    await tester.pumpAndSettle();
+    expect(find.text('LAST SESSION'), findsOneWidget);
+  });
+
+  test('By Legend and By Map: this split comes with the summary, All is fetched once', () async {
+    SharedPreferences.setMockInitialValues({
+      'account.apex': jsonEncode({'playerId': 'apex-1', 'game': 'apex', 'name': 'Phami', 'platform': 'PC'}),
+    });
+    final paths = <String>[];
+    final state = AppState(
+      api: TrackerApi(
+        const TrackerConfig(baseUrl: 'https://t.test', appKey: 'k'),
+        client: MockClient((r) async {
+          paths.add(r.url.path);
+          if (r.url.path.endsWith('/breakdown')) {
+            return http.Response(jsonEncode({
+              'maps': [{'map': 'Olympus', 'matches': 40, 'delta': 900, 'wins': 25}],
+              'characters': [{'name': 'Wraith', 'matches': 40, 'delta': 900, 'wins': 25}],
+            }), 200);
+          }
+          if (r.url.path == '/v1/players/apex-1') {
+            return http.Response(jsonEncode({
+              ..._summary(),
+              'maps': [{'map': 'Olympus', 'matches': 4, 'delta': 120, 'wins': 3}],
+              'characters': [{'name': 'Wraith', 'matches': 4, 'delta': 120, 'wins': 3}],
+            }), 200);
+          }
+          return http.Response('{}', 200);
+        }),
+      ),
+      prefs: await SharedPreferences.getInstance(),
+    );
+    await state.refresh();
+    expect(state.statsRange(Game.apex), StatsRange.split);
+    expect(state.breakdown(Game.apex)!.maps.single.matches, 4);
+    expect(paths.where((p) => p.endsWith('/breakdown')), isEmpty);
+
+    await state.setStatsRange(Game.apex, StatsRange.all);
+    expect(state.breakdown(Game.apex)!.maps.single.matches, 40);
+    expect(state.breakdown(Game.apex)!.characters.single.map, 'Wraith');
+    await state.setStatsRange(Game.apex, StatsRange.split);
+    await state.setStatsRange(Game.apex, StatsRange.all);
+    expect(paths.where((p) => p.endsWith('/breakdown')).length, 1);
+    expect(StatsRange.split.label(Game.valorant), 'This act');
+  });
+
   test('VALORANT sessions allow for game length (times are game starts)', () {
     final t = DateTime(2026, 11, 8, 20);
     final matches = [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/game.dart';
+import '../models/insights.dart';
 import '../models/player_query.dart';
 import '../models/summary.dart';
 import '../services/tracker_api.dart';
@@ -9,6 +10,7 @@ import '../widgets/common.dart';
 import '../widgets/game_logo.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/history_chart.dart';
+import '../widgets/insight_cards.dart';
 import '../widgets/match_list.dart';
 import '../widgets/performance_card.dart';
 import '../widgets/rank_hero.dart';
@@ -300,6 +302,11 @@ class _PlayerPageState extends State<PlayerPage> {
             RankHero(game: game, summary: s, accountName: s.name),
             const SizedBox(height: 12),
             TodayTile(game: game, today: s.today),
+            // Their last session, from the games we have (VALORANT recent games, or Apex if tracked).
+            if (Session.all(s.matches, game: game) case final sessions when sessions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SessionsCard(game: game, sessions: sessions, player: s.name),
+            ],
             if (game == Game.valorant && Performance.from(s.matches) != null) ...[
               const SectionTitle('Performance'),
               PerformanceCard(game: game, matches: s.matches),

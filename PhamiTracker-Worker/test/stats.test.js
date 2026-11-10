@@ -60,3 +60,22 @@ test("poll pacing", () => {
   assert.equal(nextPollDelay("valorant", { now, rateLimited: true }), 2 * MIN);
   assert.equal(nextPollDelay("apex", { now, errorCount: 10 }), 30 * MIN);
 });
+
+test("latest session for the widget", async () => {
+  const { latestSession } = await import("../src/stats.js");
+  const MIN = 60_000;
+  const t = Date.UTC(2026, 10, 9, 20);
+  const row = (min, delta, after, kind = "match") => ({ ts: t + min * MIN, delta, score_after: after, kind, detail: "{}" });
+  const rows = [row(50, 30, 7130), row(20, -20, 7100), row(0, 120, 7120), row(-300, 40, 7000)].reverse();
+  const s = latestSession(rows, "apex", t + 60 * MIN);
+  assert.deepEqual(
+    { games: s.games, wins: s.wins, net: s.net, best: s.best, worst: s.worst, startScore: s.startScore, endScore: s.endScore, series: s.series, over: s.over },
+    { games: 3, wins: 2, net: 130, best: 120, worst: -20, startScore: 7000, endScore: 7130, series: [120, 100, 130], over: false },
+  );
+  assert.equal(latestSession(rows, "apex", t + 100 * MIN).over, true);
+  // VALORANT games 50 minutes apart by start time are one session.
+  const val = [row(0, 20, 1520), row(50, 18, 1538)];
+  assert.equal(latestSession(val, "valorant", t + 60 * MIN).games, 2);
+  assert.equal(latestSession(val, "apex", t + 60 * MIN).games, 1);
+  assert.equal(latestSession([], "apex"), null);
+});

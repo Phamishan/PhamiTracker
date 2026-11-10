@@ -108,6 +108,10 @@ class TrackerApi {
     return [for (final d in (json['history'] as List? ?? const [])) DayPoint.fromJson(d as Map<String, dynamic>)];
   }
 
+  /// By Legend/Agent and By Map over every recorded game.
+  Future<Breakdown> breakdown(String playerId) async =>
+      Breakdown.fromJson(await _send('GET', '/v1/players/$playerId/breakdown'));
+
   /// Anyone's player page, looked up live without tracking them.
   Future<PlayerSummary> search({
     required Game game,

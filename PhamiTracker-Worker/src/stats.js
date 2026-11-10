@@ -163,6 +163,48 @@ export function periodStats(rows, { tzOffset = 0 } = {}) {
  */
 export const sessionIdleMs = (game) => (game === "valorant" ? 75 : 45) * MINUTE;
 
+/**
+ * Two games this far apart (by their timestamps) are in different sessions. Same rule as the app
+ * (Session.gapFor in insights.dart), the Last Session widget and the Live Activity.
+ * VALORANT times are game starts, so its gap also allows for a game's length.
+ */
+export const sessionGapMs = (game) => (game === "valorant" ? sessionIdleMs(game) + 45 * MINUTE : sessionIdleMs(game));
+
+/**
+ * The player's most recent session from newest-first match rows, for the Last Session widget.
+ * Same grouping as the app's Session (insights.dart): games closer together than the gap are one
+ * session. VALORANT times are game starts, so its gap also allows for a game's length.
+ */
+export function latestSession(rows, game, now = Date.now()) {
+  const gap = sessionGapMs(game);
+  const played = rows.filter((m) => m.kind === "match").sort((a, b) => a.ts - b.ts);
+  if (played.length === 0) return null;
+  let first = played.length - 1;
+  while (first > 0 && played[first].ts - played[first - 1].ts < gap) first--;
+  const games = played.slice(first);
+  const won = (m) => {
+    const detail = typeof m.detail === "string" ? JSON.parse(m.detail || "{}") : m.detail ?? {};
+    return detail.won ?? (m.delta > 0);
+  };
+  const wins = games.filter(won).length;
+  let running = 0;
+  return {
+    games: games.length,
+    wins,
+    losses: games.length - wins,
+    net: games.reduce((sum, m) => sum + m.delta, 0),
+    best: Math.max(...games.map((m) => m.delta)),
+    worst: Math.min(...games.map((m) => m.delta)),
+    start: games[0].ts,
+    end: games.at(-1).ts,
+    startScore: games[0].score_after - games[0].delta,
+    endScore: games.at(-1).score_after,
+    // Running total after each game, oldest first (the sparkline).
+    series: games.map((m) => (running += m.delta)),
+    over: now - games.at(-1).ts >= gap,
+  };
+}
+
 /** Apex RP swings bigger than this are season resets / corrections, not a single game. */
 export const APEX_ADJUSTMENT_THRESHOLD = 1000;
 

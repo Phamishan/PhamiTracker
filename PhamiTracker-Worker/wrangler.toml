@@ -14,6 +14,13 @@ database_id = "118f333b-0dcf-40f0-9aee-61738da02631"
 migrations_dir = "migrations"
 
 [vars]
+# Apex split dates read off the game (Ranked tab). They override apexseasons.online until the end
+# date passes, then scraping takes over again. Update or remove them each split.
+APEX_SEASON = "Season 31 · Cipher"
+APEX_SPLIT = "1"
+APEX_SPLIT_START = "2026-11-03T18:00:00Z"
+# In-game on 9 Nov 19:04 (Danish time): 35d 23h left -> 15 Dec, at the usual 10:00 Pacific reset.
+APEX_SPLIT_END = "2026-12-15T18:00:00Z"
 # Per-cron-run caps that keep us under the API keys' rate limits
 # (apexlegendsapi.com: 2 req/s, HenrikDev basic key: 30 req/min).
 APEX_POLLS_PER_RUN = "40"

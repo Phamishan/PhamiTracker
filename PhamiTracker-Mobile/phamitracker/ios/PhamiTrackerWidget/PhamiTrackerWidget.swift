@@ -336,6 +336,28 @@ struct Snapshot: Codable {
     let agent: String?
   }
 
+  /// The latest session (latestSession() in the worker's stats.js).
+  struct Session: Codable {
+    let games: Int
+    let wins: Int
+    let losses: Int
+    let net: Int
+    let best: Int
+    let worst: Int
+    /// First and last game, ms since 1970 (VALORANT: when the game started).
+    let start: Double
+    let end: Double
+    var series: [Int]? = nil
+
+    var startDate: Date { Date(timeIntervalSince1970: start / 1000) }
+    var endDate: Date { Date(timeIntervalSince1970: end / 1000) }
+
+    /// Same rule as the app: 45 minutes after the last Apex game, 120 after a VALORANT game's start.
+    func isOver(_ game: TrackedGame, now: Date = .now) -> Bool {
+      now.timeIntervalSince(endDate) >= (game == .valorant ? 120 : 45) * 60
+    }
+  }
+
   let score: Int?
   let rankLabel: String?
   let rank: Rank?
@@ -345,6 +367,7 @@ struct Snapshot: Codable {
   var history: [Day]? = nil
   var matches: [Match]? = nil
   var season: Season? = nil
+  var session: Session? = nil
 
   var polledDate: Date? { polledAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
 
@@ -411,7 +434,11 @@ struct TrackerEntry: TimelineEntry {
           Snapshot.Match(ts: now - 600_000, delta: 196, kind: "match", map: "World's Edge", legend: "Wraith", agent: nil),
           Snapshot.Match(ts: now - 3_000_000, delta: -26, kind: "match", map: "World's Edge", legend: "Wraith", agent: nil),
           Snapshot.Match(ts: now - 5_400_000, delta: 65, kind: "match", map: "World's Edge", legend: "Bangalore", agent: nil),
-        ]
+        ],
+        session: Snapshot.Session(
+          games: 6, wins: 4, losses: 2, net: 240, best: 196, worst: -26,
+          start: now - 7_200_000, end: now - 600_000, series: [40, 25, 120, 95, 44, 240]
+        )
       ),
       goal: Goal(label: game == .apex ? "Master" : "Ascendant 1", targetScore: game == .apex ? 16_000 : 1_800, startScore: base)
     )
@@ -681,10 +708,22 @@ struct MapRotationWidget: Widget {
   }
 }
 
+struct LastSessionWidget: Widget {
+  var body: some WidgetConfiguration {
+    AppIntentConfiguration(kind: "LastSession", intent: GameIntent.self, provider: Provider()) { entry in
+      LastSessionView(entry: entry)
+    }
+    .configurationDisplayName("Last Session")
+    .description("Your latest session: points, games, wins and losses.")
+    .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
+  }
+}
+
 @main
 struct PhamiTrackerWidgets: WidgetBundle {
   var body: some Widget {
     RPTodayWidget()
+    LastSessionWidget()
     RankGoalWidget()
     ClimbWidget()
     MapRotationWidget()
@@ -1032,6 +1071,104 @@ struct RPTodayView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+// MARK: - Last Session
+
+/// The latest session (SessionCard in insight_cards.dart): net points, games, W / L, best and worst.
+struct LastSessionView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: TrackerEntry
+
+  var session: Snapshot.Session? { entry.snapshot?.session }
+  var title: String { session.map { $0.isOver(entry.game) ? "Last session" : "Session" } ?? "Last session" }
+
+  var body: some View {
+    content.containerBackground(for: .widget) { cardBackground }
+  }
+
+  @ViewBuilder var content: some View {
+    switch family {
+    case .accessoryInline:
+      if let session {
+        Label("\(title) \(signed(session.net)) \(entry.game.unit) · \(session.games) games", systemImage: "gamecontroller")
+      } else {
+        Label("No sessions yet", systemImage: "gamecontroller")
+      }
+    case .accessoryRectangular:
+      VStack(alignment: .leading, spacing: 1) {
+        Text("\(title) · \(session?.games ?? 0) games").font(grotesk(10, .medium).monospacedDigit())
+        Text(session.map { "\(signed($0.net)) \(entry.game.unit)" } ?? "—").font(display(26)).widgetAccentable()
+        Text(session.map { "\($0.wins)W \($0.losses)L" } ?? "No games yet").font(grotesk(11))
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    default:
+      if entry.state == .notLinked {
+        NotLinkedView(game: entry.game)
+      } else if family == .systemMedium {
+        HStack(spacing: 16) {
+          summary
+          details
+        }
+        .foregroundStyle(.white)
+      } else {
+        summary.foregroundStyle(.white)
+      }
+    }
+  }
+
+  var summary: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      HStack(spacing: 6) {
+        GameLogo(game: entry.game, size: 12, color: entry.game.accent)
+        MonoLabel(title, size: 9)
+      }
+      Spacer(minLength: 2)
+      if let session {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+          Text(signed(session.net))
+            .font(display(40))
+            .foregroundStyle(deltaColor(session.net))
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+          Text(entry.game.unit).font(display(14)).foregroundStyle(textDim)
+        }
+        HStack(spacing: 4) {
+          Text("\(session.games) \(session.games == 1 ? "game" : "games") ·").font(grotesk(12)).foregroundStyle(textDim)
+          winLoss(session.wins, session.losses).font(display(12))
+        }
+        .lineLimit(1)
+        Spacer(minLength: 4)
+        MonoLabel(when(session), color: textFaint, size: 8)
+      } else {
+        Text("No games yet.").font(grotesk(12)).foregroundStyle(textDim)
+        Spacer(minLength: 0)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  var details: some View {
+    VStack(spacing: 6) {
+      if let session {
+        HStack(spacing: 6) {
+          StatTile(label: "Best", value: Text(signed(session.best)).foregroundColor(deltaColor(session.best)))
+          StatTile(label: "Worst", value: Text(signed(session.worst)).foregroundColor(deltaColor(session.worst)))
+        }
+        if let series = session.series, !series.isEmpty {
+          Sparkline(values: series, color: deltaColor(session.net)).frame(maxHeight: .infinity)
+        } else {
+          Spacer(minLength: 0)
+        }
+      }
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  /// "Today 18:02 – 20:41" (start and end in 24-hour time).
+  func when(_ session: Snapshot.Session) -> String {
+    "\(matchDate(session.startDate)) – \(danishClock(session.endDate))"
   }
 }
 

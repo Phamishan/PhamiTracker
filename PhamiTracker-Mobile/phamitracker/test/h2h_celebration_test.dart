@@ -6,10 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:phamitracker/models/game.dart';
 import 'package:phamitracker/models/summary.dart';
+import 'package:phamitracker/models/player_query.dart';
 import 'package:phamitracker/pages/compare_page.dart';
+import 'package:phamitracker/pages/search_page.dart';
+import 'package:phamitracker/widgets/common.dart';
 import 'package:phamitracker/services/app_state.dart';
 import 'package:phamitracker/services/notification_service.dart';
 import 'package:phamitracker/services/tracker_api.dart';
+import 'package:phamitracker/services/widget_bridge.dart';
 import 'package:phamitracker/widgets/celebration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -178,5 +182,29 @@ void main() {
     await tester.tap(find.text("LET'S GO"));
     await tester.pumpAndSettle();
     expect(find.text('RANK UP'), findsNothing);
+  });
+
+  testWidgets("a searched player's page shows their last session", (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState(
+      api: TrackerApi(const TrackerConfig(baseUrl: 'https://t.test', appKey: 'k'), client: MockClient((r) async => http.Response('{}', 200))),
+      prefs: await SharedPreferences.getInstance(),
+    );
+    final them = PlayerSummary.fromJson(_summary(name: 'Rival', matches: [_game(0, 21, won: true), _game(1, -15, won: false), _game(2, 18, won: true)]));
+    const query = PlayerQuery(game: Game.valorant, name: 'Rival', tag: 'EUW', platform: 'pc', region: 'eu');
+    await tester.pumpWidget(AppScope(state: state, child: MaterialApp(home: PlayerPage(query: query, initial: them))));
+    await tester.pump();
+    expect(find.textContaining('SESSION'), findsWidgets);
+    expect(find.text('+24 RR'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  test('the widget fallback snapshot carries the last session', () {
+    final s = PlayerSummary.fromJson(_summary(matches: [_game(0, 21, won: true), _game(1, -15, won: false), _game(2, 18, won: true)]));
+    final session = WidgetBridge.snapshotJson(s)!['session'] as Map<String, Object?>;
+    expect(session['games'], 3);
+    expect(session['net'], 24);
+    expect(session['wins'], 2);
+    expect(session['series'], [18, 3, 24]);
   });
 }

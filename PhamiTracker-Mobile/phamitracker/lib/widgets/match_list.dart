@@ -156,18 +156,39 @@ DateTime copenhagenTime(DateTime time) {
 
 /// RP/RR won or lost per map, the "which map am I bad at" view.
 class MapStatsCard extends StatelessWidget {
-  const MapStatsCard({super.key, required this.game, required this.maps});
+  const MapStatsCard({super.key, required this.game, required this.maps, this.range, this.onRange});
 
   final Game game;
-  final List<MapStat> maps;
+
+  /// Null while the range loads.
+  final List<MapStat>? maps;
+
+  /// This split/act or all time. Null hides the toggle (search results: their last 100 games).
+  final StatsRange? range;
+  final ValueChanged<StatsRange>? onRange;
 
   @override
   Widget build(BuildContext context) {
-    final maxAbs = maps.fold<int>(1, (m, s) => s.delta.abs() > m ? s.delta.abs() : m);
+    final maps = this.maps;
     return TrackerCard(
       child: Column(
         children: [
-          for (final (i, stat) in maps.take(6).indexed) ...[
+          if (range != null && onRange != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: SegmentToggle(values: StatsRange.values, selected: range!, label: (r) => r.label(game), onChanged: onRange!),
+            ),
+          if (maps == null)
+            const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2))
+          else if (maps.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                range == StatsRange.split ? 'No games this ${game == Game.apex ? 'split' : 'act'} yet.' : 'No games yet.',
+                style: const TextStyle(color: AppColors.textDim),
+              ),
+            ),
+          for (final (i, stat) in (maps ?? const <MapStat>[]).take(6).indexed) ...[
             if (i > 0) const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -195,8 +216,6 @@ class MapStatsCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            ProgressBar(value: stat.delta.abs() / maxAbs, color: AppColors.delta(stat.delta), height: 5),
           ],
         ],
       ),
