@@ -8,10 +8,11 @@
 🔀 - Switch between games
 ☁️ - Live tracking in the cloud (works with the app closed)
 ⚡ - RP/RR earned today
+📊 - Progress bar to your next rank
 🎯 - Rank goal with split countdown & RP/day pace
 📈 - Climb chart (all time, 3 months, 1 month, 14 days, 7 days)
 📜 - Match history (legend/agent, map, K/D/A)
-🗺️ - RP/RR per map, legend and agent (this split/act or all time)
+🗺️ - RP/RR per map, legend and agent (this split/act or all time, tap for every game)
 🧾 - VALORANT match scoreboards & performance (K/D, KDA, HS%, ACS)
 👑 - Apex Predator cutoff
 🏆 - Split/act recap & records
@@ -125,3 +126,9 @@
   - Added All and This split/act to By Legend/Agent and By Map
   - Fixed the Apex split countdown
   - Fixed the Live Activity counting two sessions as one
+- 1.1.2 - 12/11/2026
+  - Added a progress bar to the next rank
+  - Added every game per legend, agent and map
+  - Fixed some VALORANT players not showing up in search
+  - Unrated VALORANT players now show up in search
+  - Clearer error messages when a search fails

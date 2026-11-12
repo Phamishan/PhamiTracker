@@ -17,6 +17,7 @@ import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
 import 'home_page.dart';
 import 'compare_page.dart';
+import 'games_page.dart';
 import 'link_account_page.dart';
 import 'match_page.dart';
 
@@ -263,6 +264,28 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  /// Every game behind a By Legend / By Map row, from the games we have for them.
+  void _openGames(MapStat stat, {required bool byMap}) {
+    final s = _summary;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => GamesPage(
+        game: s.game,
+        stat: stat,
+        byMap: byMap,
+        subtitle: 'Recent games',
+        load: () async => [
+          for (final m in s.matches)
+            if (!m.isAdjustment && (byMap ? m.map : m.character) == stat.map) m,
+        ],
+        onOpenMatch: s.game == Game.valorant
+            ? (match) => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => MatchPage(match: match, region: widget.query.region ?? 'eu', playerName: s.name),
+                ))
+            : null,
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = _summary;
@@ -317,11 +340,11 @@ class _PlayerPageState extends State<PlayerPage> {
             ],
             if (s.characters.isNotEmpty) ...[
               SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
-              MapStatsCard(game: game, maps: s.characters),
+              MapStatsCard(game: game, maps: s.characters, onOpen: (stat) => _openGames(stat, byMap: false)),
             ],
             if (s.maps.isNotEmpty) ...[
               const SectionTitle('By Map'),
-              MapStatsCard(game: game, maps: s.maps),
+              MapStatsCard(game: game, maps: s.maps, onOpen: (stat) => _openGames(stat, byMap: true)),
             ],
             SectionTitle(s.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${s.matches.length}'),
             MatchList(

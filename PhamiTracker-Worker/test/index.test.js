@@ -57,6 +57,21 @@ test("breakdown adds up every recorded game by legend and map", async () => {
   assert.deepEqual(all.maps.map((m) => [m.map, m.matches, m.delta]), [["Olympus", 2, 80], ["World's Edge", 1, 50]]);
 });
 
+test("games on one legend or map, newest first", async () => {
+  const player = { id: "p1", game: "apex", score: 10_300, created_at: now - 400 * DAY };
+  const game = (ts, delta, legend, map) => ({ ts, delta, kind: "match", score_after: 0, detail: JSON.stringify({ legend, map }) });
+  const matches = [
+    game(now - DAY, 100, "Wraith", "Olympus"),
+    game(now - 2 * DAY, 30, "Bangalore", "Olympus"),
+    game(now - 200 * DAY, -20, "Wraith", "Storm Point"),
+  ];
+  const env = { DB: fakeDb({ player, matches }) };
+  const wraith = await call("/v1/players/p1/games?by=character&name=Wraith&range=all", env);
+  assert.deepEqual(wraith.matches.map((m) => [m.delta, m.map]), [[100, "Olympus"], [-20, "Storm Point"]]);
+  const olympus = await call("/v1/players/p1/games?by=map&name=Olympus&range=all", env);
+  assert.deepEqual(olympus.matches.map((m) => m.legend), ["Wraith", "Bangalore"]);
+});
+
 test("linking an Apex uid looks the account up by uid, not by name", async (t) => {
   const apexCalls = [];
   t.mock.method(globalThis, "fetch", async (url) => {
@@ -162,6 +177,51 @@ test("searching VALORANT builds a page from recent games without tracking", asyn
   assert.equal(res.matches[0].map, "Ascent");
   assert.equal(res.today.delta, 6);
   assert.equal(cached.length, 1);
+});
+
+test("VALORANT search: 'Not able to fetch needed resource' retries in the account's own region", async (t) => {
+  const asked = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const path = new URL(url).pathname;
+    asked.push(path);
+    if (path.includes("/v3/mmr/eu/")) {
+      return Response.json({ errors: [{ message: "Not able to fetch needed resource to build response", code: 24 }] }, { status: 400 });
+    }
+    if (path.includes("/v2/account/")) return Response.json({ data: { puuid: "pu", name: "meeji", tag: "real", region: "na" } });
+    if (path.includes("/v3/mmr/na/")) {
+      return Response.json({ data: { account: { puuid: "pu", name: "meeji", tag: "real" }, current: { elo: 1300, rr: 0, tier: { id: 15, name: "Platinum 1" } } } });
+    }
+    return Response.json({ data: [] });
+  });
+  const res = await call("/v1/search?game=valorant&name=meeji&tag=real&region=eu", { DB: emptyDb(), HENRIK_API_KEY: "k" });
+  assert.equal(res.rankLabel, "Platinum 1");
+  assert.equal(res.player.region, "na");
+  assert.ok(asked.some((p) => p.includes("/mmr-history/na/")), "history comes from the right region too");
+});
+
+test("VALORANT search: an account without rank data shows as Unrated, a missing one as not found", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const path = new URL(url).pathname;
+    if (path.includes("/v3/mmr/")) {
+      return Response.json({ errors: [{ message: "Not able to fetch needed resource to build response" }] }, { status: 400 });
+    }
+    if (path.includes("/v2/account/Pray/")) return Response.json({ data: { puuid: "pu", name: "Pray", tag: "1551", region: "eu" } });
+    if (path.includes("/v2/account/")) return Response.json({ errors: [{ message: "Not found" }] }, { status: 404 });
+    return Response.json({ data: [] });
+  });
+  const unrated = await call("/v1/search?game=valorant&name=Pray&tag=1551&region=eu", { DB: emptyDb(), HENRIK_API_KEY: "k" });
+  assert.equal(unrated.player.name, "Pray");
+  assert.equal(unrated.rankLabel, "Unrated");
+  assert.equal(unrated.score, null);
+
+  const missing = await worker.fetch(new Request("https://tracker.test/v1/search?game=valorant&name=nobody&tag=0000"), { DB: emptyDb(), HENRIK_API_KEY: "k" }, { waitUntil: () => {} });
+  assert.equal(missing.status, 404);
+});
+
+test("search errors are friendly, not the upstream API's wording", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response("nope", { status: 503 }));
+  const res = await call("/v1/search?game=valorant&name=x&tag=y", { DB: emptyDb(), HENRIK_API_KEY: "k" });
+  assert.equal(res.error, "Couldn't load this player from Riot right now. Try again in a minute.");
 });
 
 test("searching Apex shows the live rank", async (t) => {

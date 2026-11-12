@@ -194,6 +194,7 @@ void main() {
     const query = PlayerQuery(game: Game.valorant, name: 'Rival', tag: 'EUW', platform: 'pc', region: 'eu');
     await tester.pumpWidget(AppScope(state: state, child: MaterialApp(home: PlayerPage(query: query, initial: them))));
     await tester.pump();
+    await tester.scrollUntilVisible(find.text('+24 RR'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.textContaining('SESSION'), findsWidgets);
     expect(find.text('+24 RR'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());

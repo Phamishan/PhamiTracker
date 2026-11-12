@@ -6,6 +6,7 @@
 //   GET    /v1/players/:id/widget      compact payload for the iOS widgets  ?tzOffset=
 //   GET    /v1/players/:id/history     daily scores for the climb chart  ?days=<n, 0 = all time>&tzOffset=
 //   GET    /v1/players/:id/breakdown   By Legend/Agent and By Map over every recorded game
+//   GET    /v1/players/:id/games       every game on one legend/agent or map  ?by=character|map&name=&range=split|all
 //   DELETE /v1/players/:id             stop tracking
 //   POST   /v1/notifications           push notifications about favourites and own goals
 //                                      {token, sandbox?, follows: [{game, name, tag?, platform, region?}],
@@ -160,7 +161,7 @@ async function route(request, env, ctx) {
     }
     return fail(404, "Not found");
   }
-  if (request.method !== "GET" || parts.length > 4 || (parts[3] && !["widget", "history", "breakdown"].includes(parts[3]))) {
+  if (request.method !== "GET" || parts.length > 4 || (parts[3] && !["widget", "history", "breakdown", "games"].includes(parts[3]))) {
     return fail(404, "Not found");
   }
 
@@ -169,6 +170,7 @@ async function route(request, env, ctx) {
   const tzOffset = clamp(Number(url.searchParams.get("tzOffset")) || 0, -14 * 60, 14 * 60);
   if (parts[3] === "history") return history(env, player, url, { now, tzOffset });
   if (parts[3] === "breakdown") return breakdown(env, player);
+  if (parts[3] === "games") return gamesOn(env, player, url, { now });
   const days = widget ? 7 : clamp(Number(url.searchParams.get("days")) || 14, 1, 60);
 
   // Opening the app or a widget refreshing keeps the player "active" for the poller, and gets
@@ -279,6 +281,47 @@ async function breakdown(env, player) {
   return json({ games: rows.length, maps: mapStats(rows), characters: characterStats(rows) });
 }
 
+/**
+ * Every game on one legend/agent (`by=character`) or map (`by=map`), newest first: what's behind
+ * a By Legend / By Map row. `range=split` matches the card: the current split/act, or the last
+ * 14 days before it has any games.
+ */
+async function gamesOn(env, player, url, { now }) {
+  const by = url.searchParams.get("by") === "map" ? "map" : "character";
+  const name = url.searchParams.get("name") ?? "";
+  const load = async (since) =>
+    (
+      await env.DB.prepare(
+        "SELECT ts, delta, score_after, kind, detail, external_id FROM matches WHERE player_id = ? AND kind = 'match' AND ts >= ? ORDER BY ts DESC",
+      )
+        .bind(player.id, since)
+        .all()
+    ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
+
+  let rows;
+  if (url.searchParams.get("range") === "all") rows = await load(0);
+  else {
+    const season = player.game === "apex" ? await getApexSeason(env, now) : null;
+    const period = await currentPeriod(env, player.game, now, season).catch(() => null);
+    rows = period?.start ? await load(period.start) : [];
+    if (rows.length === 0) rows = await load(now - 15 * DAY);
+  }
+  const matchesOn = (m) => (by === "map" ? m.detail.map : m.detail.legend ?? m.detail.agent) === name;
+  const games = rows.filter(matchesOn).slice(0, 500);
+  return json({
+    by,
+    name,
+    matches: games.map((row) => ({
+      matchId: row.external_id ?? null,
+      ts: row.ts,
+      delta: row.delta,
+      scoreAfter: row.score_after,
+      kind: row.kind,
+      ...row.detail,
+    })),
+  });
+}
+
 /** Daily scores for the climb chart. `days=0` means everything since the account was linked. */
 async function history(env, player, url, { now, tzOffset }) {
   const requested = Number(url.searchParams.get("days"));
@@ -346,6 +389,8 @@ async function resolvePlayer(env, body, { opened }) {
     ? await fetchApexPlayer(env, { name, platform: key.platform, uid: uid || undefined })
     : await fetchValorantPlayer(env, key);
   if (uid) key.name = snapshot.name ?? uid;
+  // VALORANT: store the region the account actually plays in, so polls go straight there.
+  if (game === "valorant" && snapshot.region) key.region = snapshot.region;
 
   const now = Date.now();
   const lower = { ...key, name: key.name.toLowerCase(), tag: key.tag.toLowerCase() };
@@ -465,9 +510,25 @@ async function search(env, url) {
   const cached = await env.DB.prepare("SELECT value, expires_at FROM cache WHERE key = ?").bind(cacheKey).first();
   if (cached && cached.expires_at > now) return json({ ...JSON.parse(cached.value), serverTime: now });
 
-  const state = game === "apex"
-    ? await fetchApexPlayer(env, account)
-    : await fetchValorantPlayer(env, account);
+  let state;
+  try {
+    state = game === "apex"
+      ? await fetchApexPlayer(env, account)
+      : await fetchValorantPlayer(env, account, { allowUnrated: true });
+  } catch (err) {
+    // The upstream API's own wording ("Not able to fetch needed resource...") means nothing to
+    // players; 404 keeps its "couldn't find" meaning in the app.
+    if (!(err instanceof ApiError) || err.status === 404) throw err;
+    console.error("search failed", game, err.status, err.message);
+    return fail(
+      err.status === 429 ? 429 : 502,
+      err.status === 429
+        ? "Too many lookups right now. Try again in a minute."
+        : `Couldn't load this player from ${game === "apex" ? "Apex" : "Riot"} right now. Try again in a minute.`,
+    );
+  }
+  // VALORANT: the region the account actually plays in (it may not be the one picked).
+  if (state.region) account.region = state.region;
 
   // Someone tracks this account already: use what the poller has recorded.
   const tracked = state.externalId

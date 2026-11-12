@@ -37,15 +37,67 @@ async function call(env, path, query = {}) {
 
 const seg = (value) => encodeURIComponent(value);
 
+/**
+ * The player's rank. HenrikDev answers "Not able to fetch needed resource to build response" when
+ * it can't build a rank for the account in that region: it plays in another region, or has no
+ * ranked data (unrated, or not played for a long time). Then look the account itself up, which
+ * says where it plays and whether it exists, and retry there. With `allowUnrated` (search), an
+ * account that exists but has no rank comes back as an unrated profile instead of an error.
+ */
 export async function fetchValorantPlayer(
   env,
   { name, tag, region, platform },
+  { allowUnrated = false } = {},
 ) {
-  const data = await call(
-    env,
-    `/v3/mmr/${seg(region)}/${seg(platform)}/${seg(name)}/${seg(tag)}`,
-  );
-  return normalizeValorantMmr(data);
+  const mmr = async (r) => ({
+    ...normalizeValorantMmr(
+      await call(env, `/v3/mmr/${seg(r)}/${seg(platform)}/${seg(name)}/${seg(tag)}`),
+    ),
+    region: r,
+  });
+  try {
+    return await mmr(region);
+  } catch (err) {
+    if (err.status === 429) throw err;
+    const account = await call(env, `/v2/account/${seg(name)}/${seg(tag)}`).catch((e) => {
+      if (e.status === 429 || e.status === 404) throw e; // 404: no such Riot ID
+      return null;
+    });
+    if (!account) throw err;
+    const home = String(account.region ?? "").toLowerCase();
+    if (VALORANT_REGIONS.includes(home) && home !== region) {
+      try {
+        return await mmr(home);
+      } catch (e) {
+        if (e.status === 429) throw e;
+      }
+    }
+    if (allowUnrated) return unratedValorantPlayer(account, VALORANT_REGIONS.includes(home) ? home : region);
+    throw err;
+  }
+}
+
+/** An account HenrikDev knows but has no rank for: shown as Unrated, without a score. */
+export function unratedValorantPlayer(account, region) {
+  return {
+    externalId: account?.puuid ?? null,
+    name: account?.name ?? null,
+    tag: account?.tag ?? null,
+    region,
+    score: null,
+    rank: {
+      name: "Unrated",
+      tier: 0,
+      image: null,
+      rr: 0,
+      lastChange: 0,
+      gamesNeeded: 0,
+      shields: 0,
+      ladderPos: null,
+      peak: null,
+    },
+    status: { online: false, inGame: false, text: null, legend: null },
+  };
 }
 
 export function normalizeValorantMmr(data) {

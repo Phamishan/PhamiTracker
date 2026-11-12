@@ -112,6 +112,16 @@ class TrackerApi {
   Future<Breakdown> breakdown(String playerId) async =>
       Breakdown.fromJson(await _send('GET', '/v1/players/$playerId/breakdown'));
 
+  /// Every game on one legend/agent ([byMap] false) or map, newest first.
+  Future<List<MatchEntry>> gamesOn(String playerId, {required String name, required bool byMap, required StatsRange range}) async {
+    final json = await _send('GET', '/v1/players/$playerId/games', query: {
+      'by': byMap ? 'map' : 'character',
+      'name': name,
+      'range': range.name,
+    });
+    return [for (final m in (json['matches'] as List? ?? const [])) MatchEntry.fromJson(m as Map<String, dynamic>)];
+  }
+
   /// Anyone's player page, looked up live without tracking them.
   Future<PlayerSummary> search({
     required Game game,

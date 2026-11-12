@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/account.dart';
 import '../models/game.dart';
 import '../models/insights.dart';
 import '../models/summary.dart';
@@ -15,6 +16,7 @@ import '../widgets/match_list.dart';
 import '../widgets/performance_card.dart';
 import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
+import 'games_page.dart';
 import 'goal_sheet.dart';
 import 'link_account_page.dart';
 import 'match_page.dart';
@@ -202,6 +204,7 @@ class _Dashboard extends StatelessWidget {
             maps: state.breakdown(game)?.characters,
             range: state.statsRange(game),
             onRange: (range) => state.setStatsRange(game, range),
+            onOpen: (stat) => _openGames(context, state, account, stat, byMap: false),
           ),
           const SectionTitle('By Map'),
           MapStatsCard(
@@ -209,11 +212,32 @@ class _Dashboard extends StatelessWidget {
             maps: state.breakdown(game)?.maps,
             range: state.statsRange(game),
             onRange: (range) => state.setStatsRange(game, range),
+            onOpen: (stat) => _openGames(context, state, account, stat, byMap: true),
           ),
         ],
       ],
     );
   }
+}
+
+/// Every game behind a By Legend / By Agent / By Map row, in the range the cards show.
+void _openGames(BuildContext context, AppState state, TrackedAccount account, MapStat stat, {required bool byMap}) {
+  final game = account.game;
+  final range = state.statsRange(game);
+  Navigator.of(context).push(MaterialPageRoute(
+    builder: (_) => GamesPage(
+      game: game,
+      stat: stat,
+      byMap: byMap,
+      subtitle: range.label(game),
+      load: () => state.api.gamesOn(account.playerId, name: stat.map, byMap: byMap, range: range),
+      onOpenMatch: game == Game.valorant
+          ? (match) => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => MatchPage(match: match, region: account.region ?? 'eu', playerName: account.displayName),
+              ))
+          : null,
+    ),
+  ));
 }
 
 /// The player name with round search and settings buttons, like PhamiJam's home header.

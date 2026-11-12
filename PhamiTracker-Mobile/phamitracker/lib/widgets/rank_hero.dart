@@ -67,6 +67,11 @@ class RankHero extends StatelessWidget {
                     : '${_number.format(s!.score)} RP',
             style: AppText.mono(size: 15),
           ),
+          if (s?.score case final score? when s!.rank.gamesNeeded <= 0)
+            if (nextRank(game, score) case final next?) ...[
+              const SizedBox(height: 16),
+              NextRankBar(game: game, score: score, next: next),
+            ],
           const SizedBox(height: 18),
           Row(
             children: [
@@ -90,6 +95,43 @@ class RankHero extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// How far through this division: a bar from its floor to the next one, like PhamiBot's
+/// "▰▰▰▱▱ 7,320/7,750 RP".
+class NextRankBar extends StatelessWidget {
+  const NextRankBar({super.key, required this.game, required this.score, required this.next});
+
+  final Game game;
+  final int score;
+  final RankStep next;
+
+  @override
+  Widget build(BuildContext context) {
+    final floor = rankAt(game, score).minScore;
+    final span = next.minScore - floor;
+    final progress = span <= 0 ? 0.0 : (score - floor) / span;
+    // VALORANT shows RR within the division (0-100); Apex shows the RP itself.
+    final have = game == Game.apex ? _number.format(score) : '${score - floor}';
+    final need = game == Game.apex ? _number.format(next.minScore) : '$span';
+    final unit = game == Game.apex ? 'RP' : 'RR';
+    return Column(
+      children: [
+        ProgressBar(value: progress, color: rankColor(next.label), height: 6),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Text('$have / $need $unit', style: AppText.mono(size: 11, color: AppColors.textDim)),
+            const Spacer(),
+            Text(
+              '${_number.format(next.minScore - score)} to ${next.label}'.toUpperCase(),
+              style: AppText.label(size: 9, color: AppColors.textFaint),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

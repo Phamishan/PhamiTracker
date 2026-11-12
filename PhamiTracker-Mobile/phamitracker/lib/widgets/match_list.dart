@@ -10,7 +10,7 @@ import 'common.dart';
 
 /// Every rank change the worker picked up, newest first. Shows five, scrolls for the rest.
 class MatchList extends StatelessWidget {
-  const MatchList({super.key, required this.game, required this.matches, this.emptyText, this.onOpen});
+  const MatchList({super.key, required this.game, required this.matches, this.emptyText, this.onOpen, this.showAll = false});
 
   static const visibleRows = 5;
   static const rowHeight = 64.0;
@@ -22,6 +22,9 @@ class MatchList extends StatelessWidget {
   /// Called when a match with a full scoreboard (VALORANT) is tapped.
   final ValueChanged<MatchEntry>? onOpen;
 
+  /// Every row in the page's own scroll, instead of five rows that scroll inside the card.
+  final bool showAll;
+
   @override
   Widget build(BuildContext context) {
     if (matches.isEmpty) {
@@ -29,6 +32,22 @@ class MatchList extends StatelessWidget {
         child: Text(
           emptyText ?? "No ranked games yet. They show up here a minute after each match, even with the app closed.",
           style: const TextStyle(color: AppColors.textDim, height: 1.4),
+        ),
+      );
+    }
+    if (showAll) {
+      return TrackerCard(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          children: [
+            for (final (i, m) in matches.indexed) ...[
+              if (i > 0) const Divider(height: 1, indent: 18, endIndent: 18, color: AppColors.border),
+              SizedBox(
+                height: rowHeight - 1,
+                child: _MatchTile(game: game, match: m, onTap: onOpen != null && m.matchId != null ? () => onOpen!(m) : null),
+              ),
+            ],
+          ],
         ),
       );
     }
@@ -156,7 +175,7 @@ DateTime copenhagenTime(DateTime time) {
 
 /// RP/RR won or lost per map, the "which map am I bad at" view.
 class MapStatsCard extends StatelessWidget {
-  const MapStatsCard({super.key, required this.game, required this.maps, this.range, this.onRange});
+  const MapStatsCard({super.key, required this.game, required this.maps, this.range, this.onRange, this.onOpen});
 
   final Game game;
 
@@ -166,6 +185,9 @@ class MapStatsCard extends StatelessWidget {
   /// This split/act or all time. Null hides the toggle (search results: their last 100 games).
   final StatsRange? range;
   final ValueChanged<StatsRange>? onRange;
+
+  /// Tapping a row: every game on that legend/agent or map.
+  final ValueChanged<MapStat>? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -189,32 +211,40 @@ class MapStatsCard extends StatelessWidget {
               ),
             ),
           for (final (i, stat) in (maps ?? const <MapStat>[]).take(6).indexed) ...[
-            if (i > 0) const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(stat.map.toUpperCase(), style: AppText.display(15)),
-                      const SizedBox(height: 3),
-                      Text(
-                        [
-                          '${stat.matches} GAMES',
-                          '${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
-                          if (stat.kd != null) 'K/D ${stat.kd!.toStringAsFixed(2)}',
-                        ].join(' · '),
-                        style: AppText.label(size: 10),
+            if (i > 0) const SizedBox(height: 4),
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: onOpen == null ? null : () => onOpen!(stat),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(stat.map.toUpperCase(), style: AppText.display(15)),
+                          const SizedBox(height: 3),
+                          Text(
+                            [
+                              '${stat.matches} GAMES',
+                              '${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
+                              if (stat.kd != null) 'K/D ${stat.kd!.toStringAsFixed(2)}',
+                            ].join(' · '),
+                            style: AppText.label(size: 10),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Text(
+                      '${signed(stat.delta)} ${game.unit}',
+                      style: AppText.display(17, color: AppColors.delta(stat.delta)),
+                    ),
+                    if (onOpen != null) const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
+                  ],
                 ),
-                Text(
-                  '${signed(stat.delta)} ${game.unit}',
-                  style: AppText.display(17, color: AppColors.delta(stat.delta)),
-                ),
-              ],
+              ),
             ),
           ],
         ],

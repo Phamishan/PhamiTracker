@@ -71,8 +71,8 @@ class _ShareableCardState extends State<ShareableCard> {
 }
 
 /// Small stat block: big value over a spaced-caps label.
-class _Fact extends StatelessWidget {
-  const _Fact(this.label, this.value, {this.color = AppColors.text});
+class Fact extends StatelessWidget {
+  const Fact(this.label, this.value, {super.key, this.color = AppColors.text});
 
   final String label;
   final String value;
@@ -96,8 +96,8 @@ class _Fact extends StatelessWidget {
 }
 
 /// Facts laid out two (or three) to a row.
-class _FactGrid extends StatelessWidget {
-  const _FactGrid(this.facts, {this.columns = 2});
+class FactGrid extends StatelessWidget {
+  const FactGrid(this.facts, {super.key, this.columns = 2});
 
   final List<Widget> facts;
   final int columns;
@@ -297,11 +297,11 @@ class SessionCard extends StatelessWidget {
               style: AppText.label(size: 10, color: AppColors.textFaint),
             ),
             const SizedBox(height: 14),
-            _FactGrid(columns: 4, [
-              _Fact('Games', '${s.matches.length}'),
-              _Fact('W / L', '${s.wins}/${s.losses}'),
-              _Fact('Best', signed(s.best), color: AppColors.delta(s.best)),
-              _Fact('Worst', signed(s.worst), color: AppColors.delta(s.worst)),
+            FactGrid(columns: 4, [
+              Fact('Games', '${s.matches.length}'),
+              Fact('W / L', '${s.wins}/${s.losses}'),
+              Fact('Best', signed(s.best), color: AppColors.delta(s.best)),
+              Fact('Worst', signed(s.worst), color: AppColors.delta(s.worst)),
             ]),
           ],
         ),
@@ -355,11 +355,11 @@ class SplitRecapCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              _FactGrid([
-                _Fact('Net ${game.unit}', signed(p.net), color: AppColors.delta(p.net)),
-                _Fact('Games · W/L', '${p.games} · ${p.wins}/${p.losses}'),
-                _Fact('Peak', p.peak == null ? '—' : _number.format(p.peak)),
-                _Fact(
+              FactGrid([
+                Fact('Net ${game.unit}', signed(p.net), color: AppColors.delta(p.net)),
+                Fact('Games · W/L', '${p.games} · ${p.wins}/${p.losses}'),
+                Fact('Peak', p.peak == null ? '—' : _number.format(p.peak)),
+                Fact(
                   game == Game.apex ? 'Best legend' : 'Best agent',
                   top == null ? '—' : '${top.map} ${signed(top.delta)}',
                   color: top == null ? AppColors.text : AppColors.delta(top.delta),
@@ -413,21 +413,21 @@ class RecordsCard extends StatelessWidget {
         children: [
           CardLabel('This ${p.noun.toLowerCase()}', icon: Icons.emoji_events_rounded),
           const SizedBox(height: 14),
-          _FactGrid(columns: 3, [
-            _Fact(
+          FactGrid(columns: 3, [
+            Fact(
               p.streakWon ? 'Win streak' : 'Loss streak',
               p.streak == 0 ? '—' : '${p.streak}',
               color: p.streak == 0 ? AppColors.text : streakColor,
             ),
-            _Fact('Best streak', p.longestWinStreak == 0 ? '—' : '${p.longestWinStreak}'),
-            _Fact('Peak', p.peak == null ? '—' : _number.format(p.peak)),
-            _Fact(
+            Fact('Best streak', p.longestWinStreak == 0 ? '—' : '${p.longestWinStreak}'),
+            Fact('Peak', p.peak == null ? '—' : _number.format(p.peak)),
+            Fact(
               p.bestDay == null ? 'Best day' : 'Best day · ${DateFormat('d MMM').format(p.bestDay!)}',
               p.bestDayDelta == null ? '—' : signed(p.bestDayDelta!),
               color: p.bestDayDelta == null ? AppColors.text : AppColors.gain,
             ),
-            _Fact('Best game', p.biggestGain == null ? '—' : signed(p.biggestGain!), color: p.biggestGain == null ? AppColors.text : AppColors.gain),
-            _Fact('Worst game', p.biggestLoss == null ? '—' : signed(p.biggestLoss!), color: p.biggestLoss == null ? AppColors.text : AppColors.loss),
+            Fact('Best game', p.biggestGain == null ? '—' : signed(p.biggestGain!), color: p.biggestGain == null ? AppColors.text : AppColors.gain),
+            Fact('Worst game', p.biggestLoss == null ? '—' : signed(p.biggestLoss!), color: p.biggestLoss == null ? AppColors.text : AppColors.loss),
           ]),
           const SizedBox(height: 10),
           Text(
