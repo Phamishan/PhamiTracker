@@ -3,29 +3,15 @@
 ## Features:
 
 ```
-🪂 - Apex Legends tracking
-🔫 - VALORANT tracking
-🔀 - Switch between games
-☁️ - Live tracking in the cloud (works with the app closed)
-⚡ - RP/RR earned today
-📊 - Progress bar to your next rank
-🎯 - Rank goal with split countdown & RP/day pace
-📈 - Climb chart (all time, 3 months, 1 month, 14 days, 7 days)
-📜 - Match history (legend/agent, map, K/D/A)
-🗺️ - RP/RR per map, legend and agent (this split/act or all time, tap for every game)
-🧾 - VALORANT match scoreboards & performance (K/D, KDA, HS%, ACS)
-👑 - Apex Predator cutoff
-🏆 - Split/act recap & records
-🎮 - Session recaps & past sessions (shareable)
-🔄 - Apex map rotation with countdown
-🔍 - Search any player, with favourites
-⚔️ - Head-to-head against any player
-📱 - Home screen & lock screen widgets (RP Today, Last Session, Rank Goal, Climb, Map Rotation)
-🏝️ - Automatic Live Activity (lock screen & Dynamic Island)
-🔔 - Notifications when you reach your goal, and about your favourites (rank ups, streaks, session recaps)
-🎉 - Rank-up & goal celebrations
-🆓 - Free
-⛔ - No ads
+🎮 - Apex Legends & VALORANT, tracked in the cloud
+📈 - Today, climb chart & progress to your next rank
+🎯 - Rank goals, celebrations & Apex Predator cutoff
+🗺️ - Stats per map, legend & agent
+📜 - Match history, sessions & split/act recaps
+🔍 - Search any player, favourites & head-to-head
+📱 - Widgets & automatic Live Activity
+🔔 - Notifications for goals & favourites
+🆓 - Free, no ads
 ```
 
 ## Version History
@@ -132,3 +118,7 @@
   - Fixed some VALORANT players not showing up in search
   - Unrated VALORANT players now show up in search
   - Clearer error messages when a search fails
+- 1.1.3 - 20/11/2026
+  - Added rank up and rank down to games (app and widget, old games too)
+  - By Legend/Agent and By Map now show every legend, agent and map
+  - Searched players now count every game, with All and This split/act

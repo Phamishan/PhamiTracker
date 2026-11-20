@@ -565,6 +565,22 @@ async function search(env, url) {
   }
 
   const stats = summarize(rows, state.score, { tzOffset, days: 14, now });
+  const season = game === "apex" ? await getApexSeason(env, now).catch(() => null) : null;
+  // By Legend/Agent and By Map: a tracked account counts every game this split/act (like its
+  // owner's own page), not just the last 100 shown in the match list. "All" is fetched separately
+  // with trackedId (/breakdown, /games).
+  let statRows = rows;
+  if (tracked) {
+    const period = await currentPeriod(env, game, now, season).catch(() => null);
+    if (period?.start) {
+      const inPeriod = (
+        await env.DB.prepare("SELECT ts, delta, kind, detail FROM matches WHERE player_id = ? AND kind = 'match' AND ts >= ?")
+          .bind(tracked.id, period.start)
+          .all()
+      ).results.map((row) => ({ ...row, detail: row.detail ? JSON.parse(row.detail) : {} }));
+      if (inPeriod.length) statRows = inPeriod;
+    }
+  }
   const body = {
     player: {
       id: null,
@@ -581,7 +597,7 @@ async function search(env, url) {
     today: stats.today,
     // Without any recorded games the "climb" is just a flat line, so leave it out.
     history: rows.length ? stats.history : [],
-    maps: stats.maps,
+    maps: mapStats(statRows),
     matches: rows.map((row) => ({
       matchId: row.external_id ?? null,
       ts: row.ts,
@@ -590,12 +606,14 @@ async function search(env, url) {
       kind: row.kind,
       ...row.detail,
     })),
-    characters: characterStats(rows),
+    characters: characterStats(statRows),
     predator: game === "apex" ? (await getApexPredator(env, now).catch(() => null))?.[account.platform] ?? null : null,
     level: state.level ?? null,
     banner: state.banner ?? null,
-    season: game === "apex" ? await getApexSeason(env, now).catch(() => null) : null,
+    season,
     tracked: Boolean(tracked),
+    // Lets the app load every game for By Legend/Agent and By Map (breakdown, games).
+    trackedId: tracked?.id ?? null,
     polledAt: now,
   };
   await env.DB.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)")

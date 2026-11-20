@@ -224,6 +224,48 @@ test("search errors are friendly, not the upstream API's wording", async (t) => 
   assert.equal(res.error, "Couldn't load this player from Riot right now. Try again in a minute.");
 });
 
+test("searching a tracked player counts every game this split, not just the last 100", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) =>
+    String(url).includes("apexlegendsstatus")
+      ? Response.json({ global: { uid: 7, name: "meeji", level: 500, rank: { rankScore: 13000, rankName: "Diamond", rankDiv: 4 } } })
+      : new Response("nope", { status: 503 }),
+  );
+  const game = (ts, legend) => ({ ts, delta: 20, score_after: 13000, kind: "match", detail: JSON.stringify({ legend, map: "Olympus" }), external_id: null });
+  // 5 Seer games early in the split, then 120 Crypto games: Seer is outside the latest 100.
+  const all = [
+    ...Array.from({ length: 120 }, (_, i) => game(now - i * 60_000, "Crypto")),
+    ...Array.from({ length: 5 }, (_, i) => game(now - 5 * DAY - i * 60_000, "Seer")),
+  ];
+  const DB = {
+    prepare: (sql) => {
+      let args = [];
+      const stmt = {
+        bind: (...a) => ((args = a), stmt),
+        first: async () => (sql.includes("FROM players") ? { id: "p-meeji" } : null),
+        all: async () => ({
+          results: !sql.includes("FROM matches")
+            ? []
+            : sql.includes("LIMIT 100")
+              ? all.slice(0, 100)
+              : all.filter((m) => m.ts >= args[1]),
+        }),
+        run: async () => ({}),
+      };
+      return stmt;
+    },
+  };
+  const env = {
+    DB,
+    APEX_API_KEY: "k",
+    APEX_SPLIT_START: new Date(now - 10 * DAY).toISOString(),
+    APEX_SPLIT_END: new Date(now + 30 * DAY).toISOString(),
+  };
+  const res = await call("/v1/search?game=apex&name=meeji&platform=pc", env);
+  assert.equal(res.matches.length, 100);
+  assert.equal(res.trackedId, "p-meeji");
+  assert.deepEqual(res.characters.map((c) => [c.name, c.matches]), [["Crypto", 120], ["Seer", 5]]);
+});
+
 test("searching Apex shows the live rank", async (t) => {
   t.mock.method(globalThis, "fetch", async () =>
     Response.json({ global: { uid: 42, name: "PHAMI", level: 500, rank: { rankScore: 13460, rankName: "Diamond", rankDiv: 3 } } }),

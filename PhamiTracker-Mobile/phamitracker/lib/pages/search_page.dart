@@ -255,10 +255,37 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late PlayerSummary _summary = widget.initial;
 
+  /// Tracked accounts: By Legend/Agent and By Map this split/act or over every recorded game.
+  StatsRange _range = StatsRange.split;
+  Breakdown? _allTime;
+
+  Future<void> _setRange(StatsRange range) async {
+    setState(() => _range = range);
+    final id = _summary.trackedId;
+    if (range != StatsRange.all || id == null || _allTime != null) return;
+    try {
+      final all = await AppScope.of(context).api.breakdown(id);
+      if (mounted) setState(() => _allTime = all);
+    } on TrackerApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  /// What the cards show: this split (from the search), all time (loaded), or their recent games.
+  Breakdown? get _breakdown => _range == StatsRange.all && _summary.trackedId != null
+      ? _allTime
+      : Breakdown(maps: _summary.maps, characters: _summary.characters);
+
   Future<void> _refresh() async {
     try {
       final summary = await widget.query.run(AppScope.of(context).api);
-      if (mounted) setState(() => _summary = summary);
+      if (mounted) {
+        setState(() {
+          _summary = summary;
+          _allTime = null;
+        });
+        if (_range == StatsRange.all) await _setRange(_range);
+      }
     } on TrackerApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
@@ -267,16 +294,22 @@ class _PlayerPageState extends State<PlayerPage> {
   /// Every game behind a By Legend / By Map row, from the games we have for them.
   void _openGames(MapStat stat, {required bool byMap}) {
     final s = _summary;
+    final api = AppScope.of(context).api;
+    final id = s.trackedId;
+    final range = _range;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => GamesPage(
         game: s.game,
         stat: stat,
         byMap: byMap,
-        subtitle: 'Recent games',
-        load: () async => [
-          for (final m in s.matches)
-            if (!m.isAdjustment && (byMap ? m.map : m.character) == stat.map) m,
-        ],
+        subtitle: id != null ? range.label(s.game) : 'Recent games',
+        // Tracked: every recorded game. Otherwise: the recent games we have.
+        load: id != null
+            ? () => api.gamesOn(id, name: stat.map, byMap: byMap, range: range)
+            : () async => [
+                  for (final m in s.matches)
+                    if (!m.isAdjustment && (byMap ? m.map : m.character) == stat.map) m,
+                ],
         onOpenMatch: s.game == Game.valorant
             ? (match) => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => MatchPage(match: match, region: widget.query.region ?? 'eu', playerName: s.name),
@@ -340,11 +373,23 @@ class _PlayerPageState extends State<PlayerPage> {
             ],
             if (s.characters.isNotEmpty) ...[
               SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
-              MapStatsCard(game: game, maps: s.characters, onOpen: (stat) => _openGames(stat, byMap: false)),
+              MapStatsCard(
+                game: game,
+                maps: _breakdown?.characters,
+                range: s.trackedId != null ? _range : null,
+                onRange: s.trackedId != null ? _setRange : null,
+                onOpen: (stat) => _openGames(stat, byMap: false),
+              ),
             ],
             if (s.maps.isNotEmpty) ...[
               const SectionTitle('By Map'),
-              MapStatsCard(game: game, maps: s.maps, onOpen: (stat) => _openGames(stat, byMap: true)),
+              MapStatsCard(
+                game: game,
+                maps: _breakdown?.maps,
+                range: s.trackedId != null ? _range : null,
+                onRange: s.trackedId != null ? _setRange : null,
+                onOpen: (stat) => _openGames(stat, byMap: true),
+              ),
             ],
             SectionTitle(s.matches.isEmpty ? 'Recent Matches' : 'Recent Matches · ${s.matches.length}'),
             MatchList(

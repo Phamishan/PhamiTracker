@@ -4,9 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/game.dart';
+import '../models/ranks.dart';
 import '../models/summary.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
+
+/// The rank a game moved into when it crossed a division (Gold II -> Gold I, or back down), worked
+/// out from the score before and after it, so it works for every game already saved. Rank
+/// adjustments (season resets, decay) aren't games and don't count.
+({RankStep rank, bool up})? rankChangeOf(Game game, MatchEntry match) {
+  if (match.isAdjustment || match.delta == 0) return null;
+  final before = rankAt(game, match.scoreAfter - match.delta);
+  final after = rankAt(game, match.scoreAfter);
+  if (before.minScore == after.minScore) return null;
+  return (rank: after, up: after.minScore > before.minScore);
+}
 
 /// Every rank change the worker picked up, newest first. Shows five, scrolls for the rest.
 class MatchList extends StatelessWidget {
@@ -122,7 +134,17 @@ class _MatchTile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(15)),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(15)),
+                      ),
+                      if (rankChangeOf(game, match) case final change?) ...[
+                        const SizedBox(width: 8),
+                        _RankChangeTag(up: change.up, rank: change.rank.label),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     details.toUpperCase(),
@@ -141,6 +163,28 @@ class _MatchTile extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "RANK UP · GOLD I" in green, "RANK DOWN · GOLD II" in red.
+class _RankChangeTag extends StatelessWidget {
+  const _RankChangeTag({required this.up, required this.rank});
+
+  final bool up;
+  final String rank;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = up ? AppColors.gain : AppColors.loss;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(6)),
+      child: Text(
+        '${up ? 'Rank up' : 'Rank down'} · $rank'.toUpperCase(),
+        maxLines: 1,
+        style: AppText.label(size: 9, color: color),
       ),
     );
   }
@@ -189,6 +233,41 @@ class MapStatsCard extends StatelessWidget {
   /// Tapping a row: every game on that legend/agent or map.
   final ValueChanged<MapStat>? onOpen;
 
+  /// Like the match list: five rows show, the rest scroll inside the card.
+  static const visibleRows = 5;
+  static const rowHeight = 56.0;
+
+  Widget _row(MapStat stat) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onOpen == null ? null : () => onOpen!(stat),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(stat.map.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.display(15)),
+                const SizedBox(height: 3),
+                Text(
+                  [
+                    '${stat.matches} GAMES',
+                    '${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
+                    if (stat.kd != null) 'K/D ${stat.kd!.toStringAsFixed(2)}',
+                  ].join(' · '),
+                  style: AppText.label(size: 10),
+                ),
+              ],
+            ),
+          ),
+          Text('${signed(stat.delta)} ${game.unit}', style: AppText.display(17, color: AppColors.delta(stat.delta))),
+          if (onOpen != null) const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final maps = this.maps;
@@ -210,43 +289,19 @@ class MapStatsCard extends StatelessWidget {
                 style: const TextStyle(color: AppColors.textDim),
               ),
             ),
-          for (final (i, stat) in (maps ?? const <MapStat>[]).take(6).indexed) ...[
-            if (i > 0) const SizedBox(height: 4),
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: onOpen == null ? null : () => onOpen!(stat),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(stat.map.toUpperCase(), style: AppText.display(15)),
-                          const SizedBox(height: 3),
-                          Text(
-                            [
-                              '${stat.matches} GAMES',
-                              '${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
-                              if (stat.kd != null) 'K/D ${stat.kd!.toStringAsFixed(2)}',
-                            ].join(' · '),
-                            style: AppText.label(size: 10),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '${signed(stat.delta)} ${game.unit}',
-                      style: AppText.display(17, color: AppColors.delta(stat.delta)),
-                    ),
-                    if (onOpen != null) const Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
-                  ],
+          if (maps != null && maps.isNotEmpty)
+            SizedBox(
+              height: rowHeight * math.min(maps.length, visibleRows),
+              child: Scrollbar(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  physics: const ClampingScrollPhysics(),
+                  itemCount: maps.length,
+                  itemExtent: rowHeight,
+                  itemBuilder: (context, i) => _row(maps[i]),
                 ),
               ),
             ),
-          ],
         ],
       ),
     );

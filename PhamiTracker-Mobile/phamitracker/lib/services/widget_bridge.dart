@@ -80,6 +80,7 @@ class WidgetBridge {
           {
             'ts': m.time.millisecondsSinceEpoch,
             'delta': m.delta,
+            'scoreAfter': m.scoreAfter,
             'kind': m.isAdjustment ? 'adjust' : 'match',
             'map': m.map,
             if (s.game == Game.apex) 'legend': m.character else 'agent': m.character,

@@ -24,6 +24,7 @@ class PlayerSummary {
     this.error,
     this.season,
     this.tracked = true,
+    this.trackedId,
     this.characters = const [],
     this.predator,
     this.split,
@@ -50,6 +51,9 @@ class PlayerSummary {
 
   /// Search results: whether anyone tracks this account (so its matches were recorded).
   final bool tracked;
+
+  /// Search results for a tracked account: its id, for loading every game (breakdown, games).
+  final String? trackedId;
 
   /// RP/RR per legend (Apex) or agent (VALORANT) this split/act.
   final List<MapStat> characters;
@@ -106,6 +110,7 @@ class PlayerSummary {
       error: json['error'] as String?,
       season: SeasonInfo.tryParse(json['season']),
       tracked: json['tracked'] != false,
+      trackedId: json['trackedId'] as String?,
       characters: [
         for (final c in (json['characters'] as List? ?? const []))
           MapStat.fromJson(c as Map<String, dynamic>),

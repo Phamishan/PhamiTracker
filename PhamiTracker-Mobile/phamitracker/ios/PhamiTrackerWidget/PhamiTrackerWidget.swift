@@ -334,6 +334,17 @@ struct Snapshot: Codable {
     let map: String?
     let legend: String?
     let agent: String?
+    /// RP (Apex) or elo (VALORANT) after the game, for the rank up / rank down tag.
+    var scoreAfter: Int? = nil
+
+    /// The rank this game moved into when it crossed a division (rankChangeOf in match_list.dart).
+    func rankChange(_ game: TrackedGame) -> (up: Bool, rank: String)? {
+      guard kind != "adjust", delta != 0, let after = scoreAfter else { return nil }
+      let before = rankStep(game, after - delta)
+      let now = rankStep(game, after)
+      guard now.floor != before.floor else { return nil }
+      return (now.floor > before.floor, now.label)
+    }
   }
 
   /// The latest session (latestSession() in the worker's stats.js).
@@ -431,7 +442,7 @@ struct TrackerEntry: TimelineEntry {
         polledAt: now,
         history: steps.enumerated().map { Snapshot.Day(day: "d\($0.offset)", score: base + $0.element, delta: 0) },
         matches: [
-          Snapshot.Match(ts: now - 600_000, delta: 196, kind: "match", map: "World's Edge", legend: "Wraith", agent: nil),
+          Snapshot.Match(ts: now - 600_000, delta: 196, kind: "match", map: "World's Edge", legend: "Wraith", agent: nil, scoreAfter: 12_100),
           Snapshot.Match(ts: now - 3_000_000, delta: -26, kind: "match", map: "World's Edge", legend: "Wraith", agent: nil),
           Snapshot.Match(ts: now - 5_400_000, delta: 65, kind: "match", map: "World's Edge", legend: "Bangalore", agent: nil),
         ],
@@ -908,9 +919,37 @@ struct RankBadge: View {
   }
 }
 
+/// Rank floors, the same as ranks.dart: Apex RP per division, VALORANT 100 RR per division.
+private let apexRankFloors: [(label: String, floor: Int)] = [
+  ("Rookie IV", 0), ("Rookie III", 250), ("Rookie II", 500), ("Rookie I", 750),
+  ("Bronze IV", 1000), ("Bronze III", 1500), ("Bronze II", 2000), ("Bronze I", 2500),
+  ("Silver IV", 3000), ("Silver III", 3500), ("Silver II", 4000), ("Silver I", 4750),
+  ("Gold IV", 5500), ("Gold III", 6250), ("Gold II", 7000), ("Gold I", 7750),
+  ("Platinum IV", 8500), ("Platinum III", 9250), ("Platinum II", 10000), ("Platinum I", 11000),
+  ("Diamond IV", 12000), ("Diamond III", 13000), ("Diamond II", 14000), ("Diamond I", 15000),
+  ("Master", 16000),
+]
+
+private let valorantRankFloors: [(label: String, floor: Int)] = {
+  let tiers = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal"]
+  var floors: [(label: String, floor: Int)] = []
+  for (i, tier) in tiers.enumerated() {
+    for div in 1...3 { floors.append(("\(tier) \(div)", (i * 3 + div - 1) * 100)) }
+  }
+  floors.append(("Radiant", 2400))
+  return floors
+}()
+
+/// The highest rank at or below [score] (rankAt in ranks.dart).
+private func rankStep(_ game: TrackedGame, _ score: Int) -> (label: String, floor: Int) {
+  let floors = game == .apex ? apexRankFloors : valorantRankFloors
+  return floors.last(where: { $0.floor <= score }) ?? floors[0]
+}
+
 /// One rank change: a tinted arrow tile, legend/agent · map, when, and the delta (_MatchTile in match_list.dart).
 private struct MatchRow: View {
   let match: Snapshot.Match
+  let game: TrackedGame
   let unit: String
 
   var body: some View {
@@ -925,7 +964,15 @@ private struct MatchRow: View {
         .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
       VStack(alignment: .leading, spacing: 2) {
         Text((title.isEmpty ? "Ranked match" : title).uppercased()).font(display(13)).lineLimit(1)
-        MonoLabel(matchDate(Date(timeIntervalSince1970: match.ts / 1000)), size: 8)
+        HStack(spacing: 6) {
+          MonoLabel(matchDate(Date(timeIntervalSince1970: match.ts / 1000)), size: 8)
+          if let change = match.rankChange(game) {
+            Text("\(change.up ? "Rank up" : "Rank down") · \(change.rank)".uppercased())
+              .font(grotesk(8, .bold))
+              .foregroundStyle(change.up ? deltaColor(1) : deltaColor(-1))
+              .lineLimit(1)
+          }
+        }
       }
       Spacer(minLength: 6)
       Text("\(signed(match.delta)) \(unit)").font(display(14)).foregroundStyle(color).lineLimit(1)
@@ -1449,7 +1496,7 @@ struct ClimbView: View {
     return VStack(spacing: 5) {
       ForEach(Array(matches.enumerated()), id: \.offset) { i, match in
         if i > 0 { Rectangle().fill(borderColor).frame(height: 1) }
-        MatchRow(match: match, unit: entry.game.unit)
+        MatchRow(match: match, game: entry.game, unit: entry.game.unit)
       }
     }
     .padding(.top, 6)
