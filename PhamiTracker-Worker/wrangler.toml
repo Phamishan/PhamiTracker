@@ -22,11 +22,15 @@ APEX_SPLIT_START = "2026-11-03T18:00:00Z"
 # In-game on 9 Nov 19:04 (Danish time): 35d 23h left -> 15 Dec, at the usual 10:00 Pacific reset.
 APEX_SPLIT_END = "2026-12-15T18:00:00Z"
 # Per-cron-run caps that keep us under the API keys' rate limits
-# (apexlegendsapi.com: 2 req/s, HenrikDev basic key: 30 req/min).
-APEX_POLLS_PER_RUN = "40"
+# (apexlegendsapi.com: 2 req/s, HenrikDev basic key: 30 req/min). Apex polls start 600 ms apart,
+# so 90 take ~54 s and leave room for the app's own refreshes and searches.
+APEX_POLLS_PER_RUN = "90"
 VALORANT_POLLS_PER_RUN = "8"
 # Players whose app/widget hasn't asked for data in this many days stop being polled.
 INACTIVE_AFTER_DAYS = "21"
+# A search tracks the player (every 5-10 min, like a favourite) for this long after the last
+# search, the same as INACTIVE_AFTER_DAYS for linked accounts.
+SEARCH_TRACK_DAYS = "21"
 
 [observability]
 enabled = true

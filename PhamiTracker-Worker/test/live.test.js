@@ -251,3 +251,67 @@ test("Apex: back in a match before the session timed out, but 48 min since the l
   record(third);
   assert.equal(await trackLiveSession(env, player(DB), { status: { inGame: false } }, [third], t0 + 58 * MIN), "continued");
 });
+
+test("searching a player starts tracking them; the cron checks them until 21 days after the last search", async (t) => {
+  const { default: worker } = await import("../src/index.js");
+  const { pollDue } = await import("../src/poller.js");
+  const DB = d1();
+  const env = { DB, APEX_API_KEY: "k" };
+  let rp = 9_000;
+  t.mock.method(globalThis, "fetch", async (url) =>
+    String(url).includes("/bridge")
+      ? Response.json({ global: { uid: 777, name: "Vannare0075", level: 300, rank: { rankScore: rp, rankName: "Platinum", rankDiv: 4 } } })
+      : new Response("nope", { status: 503 }),
+  );
+  const search = () =>
+    worker.fetch(new Request("https://t.test/v1/search?game=apex&name=Vannare0075&platform=pc"), env, { waitUntil: () => {} }).then((r) => r.json());
+
+  const first = await search();
+  assert.equal(first.score, 9_000);
+  const row = DB.raw.prepare("SELECT * FROM players").get();
+  assert.deepEqual([row.name, row.platform, row.external_id, row.last_opened_at], ["vannare0075", "PC", "777", 0]);
+  assert.ok(row.last_searched_at > 0);
+
+  // The cron picks them up: the first poll is the baseline, the next change is a game.
+  const now = Date.now();
+  assert.equal((await pollDue(env, now + 60_000)).apex, 1);
+  rp = 9_120;
+  DB.raw.prepare("UPDATE players SET next_poll_at = 0").run();
+  await pollDue(env, now + 10 * 60_000);
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM matches WHERE kind = 'match'").get().n, 1);
+
+  // Searching again (after the one-minute cache) renews it and shows the recorded game.
+  DB.raw.prepare("DELETE FROM cache").run();
+  const again = await search();
+  assert.equal(again.tracked, true);
+  assert.equal(again.matches[0].delta, 120);
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM players").get().n, 1);
+
+  // Still checked 20 days after the last search, not after 22.
+  DB.raw.prepare("UPDATE players SET next_poll_at = 0, last_searched_at = ?").run(now - 20 * 86_400_000);
+  assert.equal((await pollDue(env, now)).apex, 1);
+  DB.raw.prepare("UPDATE players SET next_poll_at = 0, last_searched_at = ?").run(now - 22 * 86_400_000);
+  assert.equal((await pollDue(env, now)).apex, 0);
+});
+
+test("linking the same Apex account by its EA name and its in-game name gives one player", async (t) => {
+  const { default: worker } = await import("../src/index.js");
+  const DB = d1();
+  const env = { DB, APEX_API_KEY: "k" };
+  // Apex answers to both names with the same account.
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ global: { uid: 1000324103190, name: "meeji", level: 400, rank: { rankScore: 8852, rankName: "Platinum", rankDiv: 4 } } }),
+  );
+  const link = (name) =>
+    worker
+      .fetch(
+        new Request("https://t.test/v1/players", { method: "POST", body: JSON.stringify({ game: "apex", name, platform: "PC" }) }),
+        env,
+        { waitUntil: () => {} },
+      )
+      .then((r) => r.json());
+  const byInGameName = await link("meeji");
+  const byEaName = await link("m4jg44rd");
+  assert.equal(byEaName.player.id, byInGameName.player.id);
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM players").get().n, 1);
+});

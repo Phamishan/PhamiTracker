@@ -20,6 +20,7 @@ import 'compare_page.dart';
 import 'games_page.dart';
 import 'link_account_page.dart';
 import 'match_page.dart';
+import 'premier_page.dart';
 
 /// Look up any player's rank and recent games without tracking them.
 class SearchPage extends StatefulWidget {
@@ -40,6 +41,9 @@ class _SearchPageState extends State<SearchPage> {
   bool _busy = false;
   String? _error;
 
+  /// VALORANT: look up a Premier team instead of a player.
+  bool _premier = false;
+
   static String _defaultPlatform(Game game) => game == Game.apex ? 'PC' : 'pc';
 
   @override
@@ -59,8 +63,26 @@ class _SearchPageState extends State<SearchPage> {
   void _selectGame(Game game) => setState(() {
         _game = game;
         _platform = _defaultPlatform(game);
+        _premier = false;
         _error = null;
       });
+
+  /// "PlaceHoldia#PLH" (or name + tag fields) -> the team's page.
+  Future<void> _searchTeam(String name, String tag) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final team = await AppScope.of(context).api.premierTeam(name: name, tag: tag);
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PremierPage(team: team)));
+    } on TrackerApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _search() async {
     var name = _name.text.trim();
@@ -72,10 +94,15 @@ class _SearchPageState extends State<SearchPage> {
       tag = parts.last.trim();
     }
     if (name.isEmpty || (_game == Game.valorant && tag.isEmpty)) {
-      setState(() => _error = _game == Game.valorant ? 'Enter a Riot ID and tag.' : 'Enter a player name.');
+      setState(() => _error = _premier
+          ? 'Enter the team name and tag.'
+          : _game == Game.valorant
+              ? 'Enter a Riot ID and tag.'
+              : 'Enter a player name.');
       return;
     }
     FocusScope.of(context).unfocus();
+    if (_premier) return _searchTeam(name, tag);
     await _open(PlayerQuery(
       game: _game,
       name: name,
@@ -117,6 +144,18 @@ class _SearchPageState extends State<SearchPage> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
           GameSwitcher(selected: game, onChanged: _selectGame),
+          if (game == Game.valorant) ...[
+            const SizedBox(height: 14),
+            SegmentToggle(
+              values: const [false, true],
+              selected: _premier,
+              label: (premier) => premier ? 'Premier team' : 'Player',
+              onChanged: (premier) => setState(() {
+                _premier = premier;
+                _error = null;
+              }),
+            ),
+          ],
           const SizedBox(height: 20),
           Row(
             children: [
@@ -127,7 +166,7 @@ class _SearchPageState extends State<SearchPage> {
                   autocorrect: false,
                   textInputAction: game == Game.valorant ? TextInputAction.next : TextInputAction.search,
                   decoration: InputDecoration(
-                    labelText: game == Game.apex ? 'Player name' : 'Riot ID',
+                    labelText: game == Game.apex ? 'Player name' : _premier ? 'Team name' : 'Riot ID',
                     prefixIcon: const Icon(Icons.search_rounded),
                   ),
                   onSubmitted: (_) => game == Game.apex ? _search() : null,
@@ -148,9 +187,11 @@ class _SearchPageState extends State<SearchPage> {
               ],
             ],
           ),
-          const SectionTitle('Platform'),
-          OptionChips(options: platforms, selected: _platform, game: game, onSelected: (v) => setState(() => _platform = v)),
-          if (game == Game.valorant) ...[
+          if (!_premier) ...[
+            const SectionTitle('Platform'),
+            OptionChips(options: platforms, selected: _platform, game: game, onSelected: (v) => setState(() => _platform = v)),
+          ],
+          if (game == Game.valorant && !_premier) ...[
             const SectionTitle('Region'),
             OptionChips(options: valorantRegions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
           ],
@@ -162,9 +203,11 @@ class _SearchPageState extends State<SearchPage> {
           GradientButton(game: game, label: 'Search', busy: _busy, onPressed: _search),
           const SizedBox(height: 14),
           Text(
-            game == Game.apex
-                ? 'Shows their live rank. Matches show up if someone tracks the account in PhamiTracker.'
-                : 'Shows their rank and recent ranked games from Riot.',
+            _premier
+                ? 'Shows the team\'s division, points, record, league matches and roster.'
+                : game == Game.apex
+                ? 'Shows their live rank, and records their ranked games for 3 weeks after you search.'
+                : 'Shows their rank and recent ranked games, and keeps tracking them for 3 weeks.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
           ),
@@ -401,7 +444,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       ))
                   : null,
               emptyText: game == Game.apex && !s.tracked
-                  ? "Apex doesn't share match history. Games show up here once someone tracks this account in PhamiTracker."
+                  ? "Apex doesn't share match history, so PhamiTracker records their games from now on. Check back after they play."
                   : 'No recent ranked games.',
             ),
           ],

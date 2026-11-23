@@ -167,7 +167,7 @@ class ComparePage extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             game == Game.apex
-                ? 'Last-10 numbers need recorded games, which a searched Apex player only has if someone tracks them.'
+                ? 'Last-10 numbers need recorded games, which a searched Apex player only has once they play after your first search.'
                 : 'K/D and the rest are from each player\'s recent ranked games.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textFaint, fontSize: 12, height: 1.4),

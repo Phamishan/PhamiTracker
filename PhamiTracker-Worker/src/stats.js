@@ -219,6 +219,9 @@ export function isApexAdjustment(delta, prevState, nextState) {
  * How long to wait before polling a player again. Close to real time while they're playing,
  * slower when they're clearly idle so the API budget goes to people mid-session.
  */
+/** How often a player who isn't playing and hasn't opened the app today is checked. */
+export const IDLE_POLL_MS = 15 * MINUTE;
+
 export function nextPollDelay(game, { now, state, lastChangeAt, lastOpenedAt, errorCount = 0, rateLimited = false }) {
   if (rateLimited) return 2 * MINUTE;
   if (errorCount > 0) return Math.min(30 * MINUTE, MINUTE * 2 ** Math.min(errorCount, 5));
@@ -227,10 +230,12 @@ export function nextPollDelay(game, { now, state, lastChangeAt, lastOpenedAt, er
   if (game === "apex") {
     if (state?.status?.online || state?.status?.inGame) return MINUTE;
     if (sinceChange < 20 * MINUTE) return MINUTE;
-    return sinceOpened < DAY ? 3 * MINUTE : 10 * MINUTE;
+    // Idle: often while they use the app today, rarely otherwise (Apex's online flag shows them
+    // logging in at the next check, then it's every minute again).
+    return sinceOpened < DAY ? 3 * MINUTE : IDLE_POLL_MS;
   }
   // VALORANT has no online flag, so recent activity is the signal.
   if (state?.pendingSince || sinceChange < 60 * MINUTE) return MINUTE;
   if (sinceChange < 6 * 60 * MINUTE || sinceOpened < 30 * MINUTE) return 2 * MINUTE;
-  return 5 * MINUTE;
+  return sinceOpened < DAY ? 5 * MINUTE : IDLE_POLL_MS;
 }

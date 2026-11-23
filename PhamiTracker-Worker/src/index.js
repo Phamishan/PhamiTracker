@@ -20,6 +20,7 @@
 //   GET    /v1/apex/season             Current season + ranked split dates
 //   GET    /v1/valorant/matches/:id    full scoreboard for one VALORANT match  ?region=
 //   GET    /v1/search                  look anyone up without tracking them
+//   GET    /v1/premier                 a VALORANT Premier team and its league matches  ?name=&tag=
 //                                      ?game=&name=&tag=&platform=&region=&tzOffset=
 //
 // Every request needs `X-App-Key: <APP_KEY>`.
@@ -45,6 +46,7 @@ import {
 import { registerDevice, unregisterDevice } from "./notify.js";
 import { currentPeriod } from "./periods.js";
 import { claimPoll, getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
+import { fetchPremierTeam } from "./premier.js";
 import { getApexSeason } from "./seasons.js";
 import { characterStats, latestSession, mapStats, periodStats, summarize } from "./stats.js";
 
@@ -79,7 +81,7 @@ export default {
     // the expiry) and activities older than 12 hours are never pushed to.
     if (isTidyMinute(controller.scheduledTime)) {
       ctx.waitUntil(
-        env.DB.prepare("DELETE FROM cache WHERE (key LIKE 'search:%' OR key LIKE 'match:%') AND expires_at < ?")
+        env.DB.prepare("DELETE FROM cache WHERE (key LIKE 'search:%' OR key LIKE 'match:%' OR key LIKE 'premier:%') AND expires_at < ?")
           .bind(controller.scheduledTime)
           .run(),
       );
@@ -129,6 +131,7 @@ async function route(request, env, ctx) {
     return fail(404, "Not found");
   }
   if (parts[1] === "search" && parts.length === 2 && request.method === "GET") return search(env, url);
+  if (parts[1] === "premier" && parts.length === 2 && request.method === "GET") return premierTeam(env, url);
   if (parts[1] !== "players") return fail(404, "Not found");
 
   if (parts.length === 2 && request.method === "POST") return createPlayer(request, env);
@@ -406,6 +409,15 @@ async function resolvePlayer(env, body, { opened }) {
       return { status: 409, error: `"${key.name}" is already linked to a different account` };
     }
   }
+  // The same account under another name: Apex answers to both the EA name (m4jg44rd) and the
+  // in-game name (meeji), VALORANT accounts get renamed. One account, one row, one history.
+  if (!player && snapshot.externalId) {
+    player = await env.DB.prepare(
+      "SELECT * FROM players WHERE game = ? AND platform = ? AND external_id = ? ORDER BY last_opened_at DESC LIMIT 1",
+    )
+      .bind(lower.game, lower.platform, snapshot.externalId)
+      .first();
+  }
 
   if (!player) {
     const id = crypto.randomUUID();
@@ -470,6 +482,37 @@ async function valorantMatch(env, matchId, url) {
   return json(match);
 }
 
+// Premier standings move a few times a week; a team page is cached for a few minutes.
+const PREMIER_CACHE_MS = 5 * 60_000;
+
+/** A Premier team: division, points, conference place, record, roster and league matches. */
+async function premierTeam(env, url) {
+  const name = String(url.searchParams.get("name") ?? "").trim();
+  const tag = String(url.searchParams.get("tag") ?? "").trim().replace(/^#/, "");
+  if (!name || !tag) return fail(400, "name and tag are required");
+  const key = `premier:${name.toLowerCase()}:${tag.toLowerCase()}`;
+  const now = Date.now();
+  const cached = await env.DB.prepare("SELECT value, expires_at FROM cache WHERE key = ?").bind(key).first();
+  if (cached && cached.expires_at > now) return json(JSON.parse(cached.value));
+
+  let team;
+  try {
+    team = await fetchPremierTeam(env, { name, tag });
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    if (err.status === 404) return fail(404, "Couldn't find that team. Check the name and tag.");
+    console.error("premier lookup failed", err.status, err.message);
+    return fail(
+      err.status === 429 ? 429 : 502,
+      err.status === 429 ? "Too many lookups right now. Try again in a minute." : "Couldn't load this team from Riot right now. Try again in a minute.",
+    );
+  }
+  await env.DB.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)")
+    .bind(key, JSON.stringify(team), now + PREMIER_CACHE_MS)
+    .run();
+  return json(team);
+}
+
 // Favourites a phone can get notifications about.
 const MAX_FOLLOWS = 20;
 
@@ -532,10 +575,17 @@ async function search(env, url) {
 
   // Someone tracks this account already: use what the poller has recorded.
   const tracked = state.externalId
-    ? await env.DB.prepare("SELECT id FROM players WHERE game = ? AND external_id = ? ORDER BY created_at LIMIT 1")
+    ? await env.DB.prepare("SELECT id FROM players WHERE game = ? AND external_id = ? ORDER BY last_opened_at DESC LIMIT 1")
         .bind(game, state.externalId)
         .first()
     : null;
+  // Searching tracks them from now on (SEARCH_TRACK_DAYS after the last search), so the next look
+  // has their games, even on Apex, which keeps no match history. Unrated players have no score to
+  // follow.
+  if (state.score != null) {
+    await trackSearched(env, tracked, account, state, now).catch((err) => console.error("search tracking failed", err));
+  }
+
   let rows = tracked
     ? (
         await env.DB.prepare(
@@ -620,6 +670,30 @@ async function search(env, url) {
     .bind(cacheKey, JSON.stringify(body), now + SEARCH_CACHE_MS)
     .run();
   return json({ ...body, serverTime: now });
+}
+
+/**
+ * Marks a searched player for tracking: renews a known one, or adds a new one that the cron then
+ * checks every few minutes (like a favourite) until SEARCH_TRACK_DAYS after the last search.
+ */
+async function trackSearched(env, tracked, account, state, now) {
+  if (tracked) {
+    await env.DB.prepare("UPDATE players SET last_searched_at = ? WHERE id = ?").bind(now, tracked.id).run();
+    return;
+  }
+  const name = (state.name ?? account.name).toLowerCase();
+  const tag = account.game === "valorant" ? (state.tag ?? account.tag).toLowerCase() : "";
+  // OR IGNORE: the same name is already a player (another account with that name before, or a
+  // search racing a link); then just renew that one.
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO players (id, game, name, tag, platform, region, external_id, last_opened_at, last_searched_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+    ).bind(crypto.randomUUID(), account.game, name, tag, account.platform, account.region ?? "", state.externalId, now, now),
+    env.DB.prepare(
+      "UPDATE players SET last_searched_at = ? WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?",
+    ).bind(now, account.game, account.platform, account.region ?? "", name, tag),
+  ]);
 }
 
 function publicPlayer(row, state) {

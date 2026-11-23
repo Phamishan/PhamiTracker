@@ -357,3 +357,44 @@ test("cron housekeeping runs every 15 minutes, session check every minute", asyn
   assert.equal(tidy.filter((q) => q.startsWith("DELETE")).length, 2);
   assert.deepEqual([0, 14, 15, 30, 45, 59].map((m) => isTidyMinute(Date.UTC(2026, 10, 6, 18, m))), [true, false, true, true, true, false]);
 });
+
+test("Premier: a team page from HenrikDev, cached", async (t) => {
+  const asked = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const path = new URL(url).pathname;
+    asked.push(path);
+    if (path.endsWith("/history")) {
+      return Response.json({ data: { league_matches: [
+        { id: "0d4e5a3c-1111-2222-3333-444455556661", points_before: 200, points_after: 300, started_at: "2026-11-20T19:00:00Z" },
+        { id: "0d4e5a3c-1111-2222-3333-444455556662", points_before: 175, points_after: 200, started_at: "2026-11-18T19:00:00Z" },
+        { id: "0d4e5a3c-1111-2222-3333-444455556663", points_before: 75, points_after: 175, started_at: "2026-11-16T19:00:00Z" },
+      ] } });
+    }
+    return Response.json({ data: {
+      id: "team-1", name: "PlaceHoldia", tag: "PLH", enrolled: true,
+      stats: { wins: 1, losses: 0, matches: 1 },
+      placement: { points: 250, conference: "EU_CENTRAL_EAST", division: 8, place: 12 },
+      customization: { primary: "#ff4655", secondary: "#000000", image: "https://img/banner.png", icon: "icon" },
+      member: [{ puuid: "pu1", name: "Phami", tag: "EUW" }, { puuid: "pu2", name: "meeji", tag: "real" }],
+    } });
+  });
+  const cached = [];
+  const team = await call("/v1/premier?name=PlaceHoldia&tag=%23PLH", { DB: emptyDb(cached), HENRIK_API_KEY: "k" });
+  assert.deepEqual(asked, ["/valorant/v1/premier/PlaceHoldia/PLH", "/valorant/v1/premier/PlaceHoldia/PLH/history"]);
+  assert.equal(team.name, "PlaceHoldia");
+  assert.equal(team.division, "Intermediate 3");
+  assert.equal(team.conference, "EU Central East");
+  assert.equal(team.region, "eu");
+  assert.equal(team.points, 300); // newest match's points
+  assert.deepEqual([team.wins, team.losses], [2, 1]); // +100, +25, +100: 50+ is a win
+  assert.deepEqual(team.matches.map((m) => [m.delta, m.result]), [[100, "win"], [25, "loss"], [100, "win"]]);
+  assert.deepEqual(team.members.map((m) => `${m.name}#${m.tag}`), ["Phami#EUW", "meeji#real"]);
+  assert.equal(cached.length, 1);
+});
+
+test("Premier: unknown team is a 404 with a friendly message", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({ errors: [{ message: "Team not found" }] }, { status: 404 }));
+  const res = await worker.fetch(new Request("https://tracker.test/v1/premier?name=nope&tag=0"), { DB: emptyDb(), HENRIK_API_KEY: "k" }, { waitUntil: () => {} });
+  assert.equal(res.status, 404);
+  assert.equal((await res.json()).error, "Couldn't find that team. Check the name and tag.");
+});

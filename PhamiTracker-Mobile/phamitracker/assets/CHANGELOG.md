@@ -9,6 +9,7 @@
 🗺️ - Stats per map, legend & agent
 📜 - Match history, sessions & split/act recaps
 🔍 - Search any player, favourites & head-to-head
+🏆 - VALORANT Premier teams
 📱 - Widgets & automatic Live Activity
 🔔 - Notifications for goals & favourites
 🆓 - Free, no ads
@@ -122,3 +123,10 @@
   - Added rank up and rank down to games (app and widget, old games too)
   - By Legend/Agent and By Map now show every legend, agent and map
   - Searched players now count every game, with All and This split/act
+- 1.1.4 - 23/11/2026
+  - Added VALORANT Premier teams (division, points, record, matches and roster)
+  - Tap any player in a VALORANT scoreboard to see their profile
+  - Searching a player now tracks their ranked games for 3 weeks
+  - Fixed the same Apex account being tracked twice under different names
+  - Faster tracking when many players are online
+  - Less tracking for idle players to save resources

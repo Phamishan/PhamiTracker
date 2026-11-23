@@ -8,39 +8,50 @@ import { isApexAdjustment, nextPollDelay } from "./stats.js";
 
 const DAY = 86_400_000;
 export const FAVOURITE_POLL_MS = 5 * 60_000;
+const RUN_BUDGET_MS = 55_000;
+
+/** How long a search keeps tracking a player nobody links or favourites (default 21 days). */
+export const searchTrackMs = (env) => Number(env.SEARCH_TRACK_DAYS ?? 21) * DAY;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Cron entry point: poll every player that is due, per game, within the rate budgets. */
 export async function pollDue(env, now = Date.now()) {
   const activeSince = now - Number(env.INACTIVE_AFTER_DAYS ?? 21) * DAY;
+  const searchedSince = now - searchTrackMs(env);
+  // Linked accounts opened lately, favourites, and players searched for lately.
   const due = async (game, limit) =>
     (
       await env.DB.prepare(
         `SELECT * FROM players WHERE game = ? AND next_poll_at <= ?
-           AND (last_opened_at >= ? OR EXISTS (SELECT 1 FROM follows f WHERE f.player_id = players.id))
+           AND (last_opened_at >= ? OR last_searched_at >= ?
+                OR EXISTS (SELECT 1 FROM follows f WHERE f.player_id = players.id))
          ORDER BY next_poll_at LIMIT ?`,
       )
-        .bind(game, now, activeSince, limit)
+        .bind(game, now, activeSince, searchedSince, limit)
         .all()
     ).results;
 
   const [apex, valorant] = await Promise.all([
-    due("apex", Number(env.APEX_POLLS_PER_RUN ?? 40)),
+    due("apex", Number(env.APEX_POLLS_PER_RUN ?? 90)),
     due("valorant", Number(env.VALORANT_POLLS_PER_RUN ?? 8)),
   ]);
 
-  // apexlegendsapi.com allows 2 requests/second; HenrikDev's limit is per minute and the cap
-  // above already keeps us under it. Each game runs sequentially, both games in parallel.
-  const run = async (players, gap) => {
+  // apexlegendsapi.com allows 2 requests/second: one poll starts every 600 ms (90 fit in a
+  // minute). HenrikDev's limit is per minute and the cap above keeps us under it. Each game runs
+  // sequentially, both in parallel, and no poll starts after 55 s so runs don't overlap the next.
+  const started = Date.now();
+  const run = async (players, spacing) => {
     for (const player of players) {
+      if (Date.now() - started > RUN_BUDGET_MS) break; // the rest stay due for the next run
+      const t = Date.now();
       // The app or a widget may have polled them since this list was loaded.
       if (!(await claimPoll(env, player))) continue;
       await pollPlayer(env, player).catch((err) => console.error("poll failed", player.id, err));
-      await sleep(gap);
+      await sleep(Math.max(0, spacing - (Date.now() - t)));
     }
   };
-  await Promise.all([run(apex, 550), run(valorant, 250)]);
+  await Promise.all([run(apex, 600), run(valorant, 250)]);
   return { apex: apex.length, valorant: valorant.length };
 }
 

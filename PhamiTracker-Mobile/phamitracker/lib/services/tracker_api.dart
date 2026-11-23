@@ -7,6 +7,7 @@ import '../models/account.dart';
 import '../models/game.dart';
 import '../models/match_detail.dart';
 import '../models/player_query.dart';
+import '../models/premier.dart';
 import '../models/summary.dart';
 
 class TrackerApiException implements Exception {
@@ -121,6 +122,10 @@ class TrackerApi {
     });
     return [for (final m in (json['matches'] as List? ?? const [])) MatchEntry.fromJson(m as Map<String, dynamic>)];
   }
+
+  /// A VALORANT Premier team ("PlaceHoldia", "PLH").
+  Future<PremierTeam> premierTeam({required String name, required String tag}) async =>
+      PremierTeam.fromJson(await _send('GET', '/v1/premier', query: {'name': name, 'tag': tag}));
 
   /// Anyone's player page, looked up live without tracking them.
   Future<PlayerSummary> search({

@@ -53,10 +53,12 @@ test("apex adjustments", () => {
 test("poll pacing", () => {
   const MIN = 60_000;
   assert.equal(nextPollDelay("apex", { now, state: { status: { inGame: true } } }), MIN);
-  assert.equal(nextPollDelay("apex", { now, state: {}, lastOpenedAt: now - 2 * 86_400_000 }), 10 * MIN);
+  assert.equal(nextPollDelay("apex", { now, state: {}, lastOpenedAt: now - 2 * 86_400_000 }), 15 * MIN);
+  assert.equal(nextPollDelay("apex", { now, state: {}, lastOpenedAt: now - HOUR }), 3 * MIN);
   assert.equal(nextPollDelay("valorant", { now, lastChangeAt: now - 10 * MIN }), MIN);
   assert.equal(nextPollDelay("valorant", { now, state: { pendingSince: now } }), MIN);
-  assert.equal(nextPollDelay("valorant", { now, lastChangeAt: now - 10 * HOUR }), 5 * MIN);
+  assert.equal(nextPollDelay("valorant", { now, lastChangeAt: now - 10 * HOUR, lastOpenedAt: now - 2 * HOUR }), 5 * MIN);
+  assert.equal(nextPollDelay("valorant", { now, lastChangeAt: now - 10 * HOUR }), 15 * MIN);
   assert.equal(nextPollDelay("valorant", { now, rateLimited: true }), 2 * MIN);
   assert.equal(nextPollDelay("apex", { now, errorCount: 10 }), 30 * MIN);
 });
