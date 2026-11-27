@@ -44,6 +44,7 @@ class PeriodStats {
     this.biggestGain,
     this.biggestLoss,
     this.topCharacter,
+    this.wrapped,
   });
 
   /// 'split', 'act' or 'recent' (last 90 days when the dates aren't known).
@@ -72,6 +73,9 @@ class PeriodStats {
 
   /// Best legend/agent by points gained.
   final MapStat? topCharacter;
+
+  /// The extra numbers for Split Wrapped.
+  final WrappedStats? wrapped;
 
   /// "Split", "Act", or "90 days" for headings.
   String get noun => switch (kind) { 'split' => 'Split', 'act' => 'Act', _ => '90 Days' };
@@ -104,6 +108,57 @@ class PeriodStats {
       biggestGain: _int((json['biggestGain'] as Map?)?['delta']),
       biggestLoss: _int((json['biggestLoss'] as Map?)?['delta']),
       topCharacter: top is Map<String, dynamic> ? MapStat.fromJson(top) : null,
+      wrapped: WrappedStats.tryParse(json['wrapped']),
+    );
+  }
+}
+
+/// Split Wrapped (wrappedStats in the worker's stats.js): most played, best map, sessions,
+/// roughly how many hours, the best session and the biggest climb.
+class WrappedStats {
+  const WrappedStats({
+    this.mostPlayed,
+    this.bestMap,
+    this.sessions = 0,
+    this.hours = 0,
+    this.bestSessionNet,
+    this.bestSessionGames,
+    this.bestSessionAt,
+    this.climb,
+    this.climbFrom,
+    this.climbTo,
+  });
+
+  final MapStat? mostPlayed;
+  final MapStat? bestMap;
+  final int sessions;
+  final int hours;
+  final int? bestSessionNet;
+  final int? bestSessionGames;
+  final DateTime? bestSessionAt;
+
+  /// The most points from a low to a later high.
+  final int? climb;
+  final int? climbFrom;
+  final int? climbTo;
+
+  static WrappedStats? tryParse(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final most = json['mostPlayed'];
+    final map = json['bestMap'];
+    final session = json['bestSession'] as Map<String, dynamic>?;
+    final climb = json['biggestClimb'] as Map<String, dynamic>?;
+    return WrappedStats(
+      mostPlayed: most is Map<String, dynamic> ? MapStat.fromJson(most) : null,
+      bestMap: map is Map<String, dynamic> ? MapStat.fromJson(map) : null,
+      sessions: _int(json['sessions']) ?? 0,
+      hours: _int(json['hours']) ?? 0,
+      bestSessionNet: _int(session?['net']),
+      bestSessionGames: _int(session?['games']),
+      bestSessionAt: _time(session?['ts']),
+      climb: _int(climb?['delta']),
+      climbFrom: _int(climb?['from']),
+      climbTo: _int(climb?['to']),
     );
   }
 }

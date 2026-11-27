@@ -20,19 +20,12 @@ class LinkAccountPage extends StatefulWidget {
 class _LinkAccountPageState extends State<LinkAccountPage> {
   final _name = TextEditingController();
   final _tag = TextEditingController();
-  late String _platform = widget.game == Game.apex ? 'PC' : 'pc';
-  String _region = 'eu';
+  late String _platform = widget.game.defaultPlatform;
+  late String _region = widget.game.defaultRegion(WidgetsBinding.instance.platformDispatcher.locale.countryCode) ?? 'eu';
   bool _busy = false;
   String? _error;
 
   Game get game => widget.game;
-
-  @override
-  void initState() {
-    super.initState();
-    final locale = WidgetsBinding.instance.platformDispatcher.locale;
-    if (locale.countryCode == 'US' || locale.countryCode == 'CA') _region = 'na';
-  }
 
   @override
   void dispose() {
@@ -45,13 +38,13 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
     var name = _name.text.trim();
     var tag = _tag.text.trim().replaceFirst('#', '');
     // Accept "Name#TAG" pasted into the name field.
-    if (game == Game.valorant && name.contains('#') && tag.isEmpty) {
+    if (game.hasRiotId && name.contains('#') && tag.isEmpty) {
       final parts = name.split('#');
       name = parts.first.trim();
       tag = parts.last.trim();
     }
-    if (name.isEmpty || (game == Game.valorant && tag.isEmpty)) {
-      setState(() => _error = game == Game.valorant ? 'Enter your Riot ID and tag.' : 'Enter your player name.');
+    if (name.isEmpty || (game.hasRiotId && tag.isEmpty)) {
+      setState(() => _error = game.hasRiotId ? 'Enter your Riot ID and tag.' : 'Enter your player name.');
       return;
     }
     setState(() {
@@ -62,9 +55,9 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
       await AppScope.of(context).link(
         game: game,
         name: name,
-        tag: game == Game.valorant ? tag : null,
+        tag: game.hasRiotId ? tag : null,
         platform: _platform,
-        region: game == Game.valorant ? _region : null,
+        region: game.regions != null ? _region : null,
       );
       if (mounted) Navigator.of(context).pop();
     } on TrackerApiException catch (e) {
@@ -76,7 +69,7 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
 
   @override
   Widget build(BuildContext context) {
-    final platforms = game == Game.apex ? apexPlatforms : valorantPlatforms;
+    final platforms = game.platforms;
     return Scaffold(
       appBar: AppBar(title: Text('Link ${game.title}')),
       body: ListView(
@@ -102,15 +95,15 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
                 child: TextField(
                   controller: _name,
                   autocorrect: false,
-                  textInputAction: game == Game.valorant ? TextInputAction.next : TextInputAction.done,
+                  textInputAction: game.hasRiotId ? TextInputAction.next : TextInputAction.done,
                   decoration: InputDecoration(
                     labelText: game == Game.apex ? 'Player name (EA / console name)' : 'Riot ID',
                     prefixIcon: const Icon(Icons.person_rounded),
                   ),
-                  onSubmitted: (_) => game == Game.apex ? _submit() : null,
+                  onSubmitted: (_) => game.hasRiotId ? null : _submit(),
                 ),
               ),
-              if (game == Game.valorant) ...[
+              if (game.hasRiotId) ...[
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
@@ -124,11 +117,11 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
               ],
             ],
           ),
-          const SectionTitle('Platform'),
+          SectionTitle(game.platformLabel),
           OptionChips(options: platforms, selected: _platform, game: game, onSelected: (v) => setState(() => _platform = v)),
-          if (game == Game.valorant) ...[
-            const SectionTitle('Region'),
-            OptionChips(options: valorantRegions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
+          if (game.regions case final regions?) ...[
+            SectionTitle(game.regionLabel),
+            OptionChips(options: regions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
           ],
           if (_error != null) ...[
             const SizedBox(height: 18),
@@ -138,9 +131,11 @@ class _LinkAccountPageState extends State<LinkAccountPage> {
           GradientButton(game: game, label: 'Start tracking', busy: _busy, onPressed: _submit),
           const SizedBox(height: 14),
           Text(
-            game == Game.apex
-                ? 'Use the name on the platform you play ranked on. Crossplay players: use your EA name with PC.'
-                : 'Matches from before you link are backfilled from your recent ranked history.',
+            switch (game) {
+              Game.apex => 'Use the name on the platform you play ranked on. Crossplay players: use your EA name with PC.',
+              Game.valorant => 'Matches from before you link are backfilled from your recent ranked history.',
+              Game.lol => 'Pick the queue to follow: Solo/Duo and Flex are separate ranks. Games are recorded from now on.',
+            },
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
           ),

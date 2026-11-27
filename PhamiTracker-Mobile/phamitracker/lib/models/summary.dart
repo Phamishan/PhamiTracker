@@ -317,7 +317,7 @@ class MatchEntry {
     isAdjustment: json['kind'] == 'adjust',
     matchId: json['matchId'] as String?,
     map: json['map'] as String?,
-    character: (json['legend'] ?? json['agent']) as String?,
+    character: (json['legend'] ?? json['agent'] ?? json['champion']) as String?,
     rank: json['rank'] as String?,
     kills: _int(json['kills']),
     deaths: _int(json['deaths']),
@@ -506,11 +506,7 @@ enum StatsRange {
   split;
 
   /// "This split" / "This act" / "All".
-  String label(Game game) => this == all
-      ? 'All'
-      : game == Game.apex
-      ? 'This split'
-      : 'This act';
+  String label(Game game) => this == all ? 'All' : 'This ${game.periodNoun}';
 
   static StatsRange fromName(String? name) => StatsRange.values.firstWhere(
     (r) => r.name == name,

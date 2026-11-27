@@ -62,9 +62,12 @@ class RankHero extends StatelessWidget {
           Text(
             s?.score == null
                 ? '—'
-                : game == Game.valorant
-                    ? '${s!.rank.rr ?? 0} RR  ·  ${_number.format(s.score)} elo'
-                    : '${_number.format(s!.score)} RP',
+                : switch (game) {
+                    Game.valorant => '${s!.rank.rr ?? 0} RR  ·  ${_number.format(s.score)} elo',
+                    // LP within the division (Master+: LP above Master).
+                    Game.lol => '${s!.score! - rankAt(game, s.score!).minScore} LP',
+                    Game.apex => '${_number.format(s!.score)} RP',
+                  },
             style: AppText.mono(size: 15),
           ),
           if (s?.score case final score? when s!.rank.gamesNeeded <= 0)
@@ -113,10 +116,10 @@ class NextRankBar extends StatelessWidget {
     final floor = rankAt(game, score).minScore;
     final span = next.minScore - floor;
     final progress = span <= 0 ? 0.0 : (score - floor) / span;
-    // VALORANT shows RR within the division (0-100); Apex shows the RP itself.
+    // VALORANT and LOL show RR / LP within the division (0-100); Apex shows the RP itself.
     final have = game == Game.apex ? _number.format(score) : '${score - floor}';
     final need = game == Game.apex ? _number.format(next.minScore) : '$span';
-    final unit = game == Game.apex ? 'RP' : 'RR';
+    final unit = game.unit;
     return Column(
       children: [
         ProgressBar(value: progress, color: rankColor(next.label), height: 6),

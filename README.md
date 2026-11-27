@@ -3,11 +3,11 @@
 ## Features:
 
 ```
-🎮 - Apex Legends & VALORANT, tracked in the cloud
+🎮 - Apex Legends, VALORANT & LOL, tracked in the cloud
 📈 - Today, climb chart & progress to your next rank
 🎯 - Rank goals, celebrations & Apex Predator cutoff
-🗺️ - Stats per map, legend & agent
-📜 - Match history, sessions & split/act recaps
+🗺️ - Stats per map, legend, agent, champion & role
+📜 - Match history, sessions, split/act recaps & Wrapped
 🔍 - Search any player, favourites & head-to-head
 🏆 - VALORANT Premier teams
 📱 - Widgets & automatic Live Activity
@@ -130,3 +130,8 @@
   - Fixed the same Apex account being tracked twice under different names
   - Faster tracking when many players are online
   - Less tracking for idle players to save resources
+- 1.1.5 - 27/11/2026
+  - Added League of Legends: Solo/Duo and Flex, every server, EUW by default
+  - LOL games with champion, role, K/D/A and LP, plus full scoreboards
+  - LOL in widgets and the Live Activity
+  - Added Split Wrapped

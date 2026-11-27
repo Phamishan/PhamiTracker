@@ -26,6 +26,15 @@ APEX_SPLIT_END = "2026-12-15T18:00:00Z"
 # so 90 take ~54 s and leave room for the app's own refreshes and searches.
 APEX_POLLS_PER_RUN = "90"
 VALORANT_POLLS_PER_RUN = "8"
+# LOL: a personal Riot key allows 100 requests per 2 minutes, and a check is 2-3 of them.
+LOL_POLLS_PER_RUN = "12"
+# LOL split dates (Riot has no API for them), like Apex's. After the end the next split runs from
+# it until these are updated. Leave unset to use the last 90 days.
+LOL_SPLIT_NAME = "Season 2026"
+# Start: the 2026 season's opening (only shown as a date: no LOL games were recorded before then).
+LOL_SPLIT_START = "2026-01-08T11:00:00Z"
+# Countdown on 27 Nov (11:15 EUW): 40 days 12:44:58 to 23:59:59 server time -> 6 Jan 2027 (CET).
+LOL_SPLIT_END = "2027-01-06T22:59:59Z"
 # Players whose app/widget hasn't asked for data in this many days stop being polled.
 INACTIVE_AFTER_DAYS = "21"
 # A search tracks the player (every 5-10 min, like a favourite) for this long after the last
@@ -38,6 +47,7 @@ enabled = true
 # Secrets (wrangler secret put <NAME>):
 #   APEX_API_KEY      - https://apexlegendsapi.com
 #   HENRIK_API_KEY    - https://docs.henrikdev.xyz
+#   RIOT_API_KEY      - https://developer.riotgames.com (LOL)
 #   APP_KEY           - shared key the app sends as X-App-Key
 #   APNS_KEY          - (optional) Apple push key (.p8 contents) for Live Activity updates
 #   APNS_KEY_ID       - (optional) that key's id

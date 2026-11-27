@@ -150,6 +150,11 @@ class TrackerApi {
   Future<MatchDetail> valorantMatch(String matchId, {required String region}) async =>
       MatchDetail.fromJson(await _send('GET', '/v1/valorant/matches/$matchId', query: {'region': region}));
 
+  /// A match's scoreboard for either Riot game ([region]: VALORANT region or LOL server).
+  Future<MatchDetail> matchDetail(Game game, String matchId, {required String region}) async => game == Game.lol
+      ? MatchDetail.fromJson(await _send('GET', '/v1/lol/matches/$matchId', query: {'server': region}))
+      : valorantMatch(matchId, region: region);
+
   /// Lets the worker push each new game to a running Live Activity.
   Future<void> registerLiveActivity(String playerId, {required String token, required bool sandbox, int? startScore}) =>
       _send('POST', '/v1/players/$playerId/live-activity', body: {

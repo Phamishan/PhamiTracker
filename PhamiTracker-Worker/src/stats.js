@@ -4,6 +4,15 @@
 const DAY = 86_400_000;
 const MINUTE = 60_000;
 
+/** What a game's rank points are called. */
+export const unitFor = (game) => ({ apex: "RP", valorant: "RR", lol: "LP" })[game] ?? "RP";
+
+/** The game's name in notifications ("Apex", "VALORANT", "LOL"). */
+export const gameTitle = (game) => ({ apex: "Apex", valorant: "VALORANT", lol: "LOL" })[game] ?? game;
+
+/** Games whose accounts have a Riot tag (Name#TAG). */
+export const hasTag = (game) => game === "valorant" || game === "lol";
+
 /** Local calendar day (YYYY-MM-DD) of `ts` for a client `tzOffset` minutes east of UTC. */
 export function dayKey(ts, tzOffset) {
   return new Date(ts + tzOffset * MINUTE).toISOString().slice(0, 10);
@@ -92,7 +101,7 @@ function addGame(entry, m) {
 export function characterStats(matches) {
   const chars = new Map();
   for (const m of matches) {
-    const name = m.detail?.legend ?? m.detail?.agent;
+    const name = m.detail?.legend ?? m.detail?.agent ?? m.detail?.champion;
     if (m.kind !== "match" || !name) continue;
     const entry = chars.get(name) ?? { name, matches: 0, delta: 0, wins: 0 };
     addGame(entry, m);
@@ -105,7 +114,7 @@ export function characterStats(matches) {
  * Recap + records for a stretch of games (a ranked split / act): where it started and ended,
  * the peak, streaks, best day, biggest swings and the best legend/agent.
  */
-export function periodStats(rows, { tzOffset = 0 } = {}) {
+export function periodStats(rows, { tzOffset = 0, game = "apex" } = {}) {
   const sorted = [...rows].sort((a, b) => a.ts - b.ts);
   const games = sorted.filter((m) => m.kind === "match");
   if (games.length === 0) return { games: 0 };
@@ -153,6 +162,54 @@ export function periodStats(rows, { tzOffset = 0 } = {}) {
     // Best by RP/RR gained, among legends/agents played at least twice when possible.
     topCharacter:
       [...characters].sort((a, b) => (b.matches > 1) - (a.matches > 1) || b.delta - a.delta)[0] ?? null,
+    wrapped: wrappedStats(sorted, games, { game, startScore }),
+  };
+}
+
+// About how long a game lasts: Apex game times are when it ended, VALORANT's when it started, so
+// either way a session runs from its first to its last timestamp plus one game.
+const GAME_MS = { apex: 20 * MINUTE, valorant: 40 * MINUTE, lol: 30 * MINUTE };
+
+/**
+ * The extra numbers for Split Wrapped: most played legend/agent, best map, sessions and roughly
+ * how many hours they took, the best session, and the biggest climb (from a low point to a later
+ * high, the comeback).
+ */
+export function wrappedStats(sorted, games, { game = "apex", startScore } = {}) {
+  if (games.length === 0) return null;
+  const gap = sessionGapMs(game);
+  const sessions = [];
+  for (const m of games) {
+    const current = sessions.at(-1);
+    if (current && m.ts - current.end < gap) {
+      current.end = m.ts;
+      current.games += 1;
+      current.net += m.delta;
+    } else {
+      sessions.push({ start: m.ts, end: m.ts, games: 1, net: m.delta });
+    }
+  }
+  const playedMs = sessions.reduce((sum, s) => sum + (s.end - s.start) + (GAME_MS[game] ?? GAME_MS.apex), 0);
+  const best = sessions.reduce((a, b) => (b.net > a.net ? b : a));
+
+  // Biggest climb: the most points from a low to a later high, over the whole score line (a rank
+  // reset at the start of the split is a real low to climb back from).
+  let low = { score: startScore ?? games[0].score_after - games[0].delta, ts: games[0].ts };
+  let climb = null;
+  for (const m of sorted) {
+    if (m.score_after - low.score > (climb?.delta ?? 0)) climb = { delta: m.score_after - low.score, from: low.score, to: m.score_after, fromTs: low.ts, toTs: m.ts };
+    if (m.score_after < low.score) low = { score: m.score_after, ts: m.ts };
+  }
+
+  const maps = mapStats(games).filter((m) => m.matches > 1 || games.length < 10);
+  const bestMap = [...maps].sort((a, b) => b.delta - a.delta)[0] ?? null;
+  return {
+    mostPlayed: characterStats(games)[0] ?? null,
+    bestMap: bestMap && bestMap.delta > 0 ? bestMap : null,
+    sessions: sessions.length,
+    hours: Math.max(1, Math.round(playedMs / (60 * MINUTE))),
+    bestSession: best.net > 0 ? { net: best.net, games: best.games, ts: best.start } : null,
+    biggestClimb: climb,
   };
 }
 
@@ -232,6 +289,13 @@ export function nextPollDelay(game, { now, state, lastChangeAt, lastOpenedAt, er
     if (sinceChange < 20 * MINUTE) return MINUTE;
     // Idle: often while they use the app today, rarely otherwise (Apex's online flag shows them
     // logging in at the next check, then it's every minute again).
+    return sinceOpened < DAY ? 3 * MINUTE : IDLE_POLL_MS;
+  }
+  if (game === "lol") {
+    // Waiting for a match to show up for an LP change, or a game just finished: soon.
+    if (state?.pendingSince || sinceChange < 20 * MINUTE) return MINUTE;
+    // In a ranked game: LP only moves when it ends (20-40 minutes), so every 2 minutes is plenty.
+    if (state?.status?.inGame) return 2 * MINUTE;
     return sinceOpened < DAY ? 3 * MINUTE : IDLE_POLL_MS;
   }
   // VALORANT has no online flag, so recent activity is the signal.

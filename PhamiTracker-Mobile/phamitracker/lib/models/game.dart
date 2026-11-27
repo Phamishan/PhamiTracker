@@ -20,6 +20,15 @@ enum Game {
     logoSvg: _valorantLogo,
     gradient: [Color(0xFFFF5A67), Color(0xFFD63A48)],
     glow: Color(0xFFFF4655),
+  ),
+  lol(
+    id: 'lol',
+    title: 'LOL',
+    shortTitle: 'LOL',
+    unit: 'LP',
+    logoSvg: _lolLogo,
+    gradient: [Color(0xFFD9B25F), Color(0xFFA8791F)],
+    glow: Color(0xFFC89B3C),
   );
 
   const Game({
@@ -63,6 +72,50 @@ const _valorantLogo = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
     'c.12.152.308.25.505.247 2.455 0 4.91.003 7.365 0 .142.02.222-.174.116-.265C10.661 15.176 5.526 8.766.4 2.35'
     'c-.08-.094-.174-.272-.322-.184z"/></svg>';
 
+// A plain "L" in a ring: PhamiTracker's own mark for LOL (League of Legends is a trademark of Riot
+// Games; their logo isn't used).
+const _lolLogo = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+    '<path d="M12 0a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 2.4a9.6 9.6 0 1 1 0 19.2 9.6 9.6 0 0 1 0-19.2z"/>'
+    '<path d="M8 5.5h3.2v10h5.3v3H8z"/></svg>';
+
+/// What differs between the games: wording, account fields, what data there is.
+extension GameRules on Game {
+  /// Accounts are Riot IDs (Name#TAG).
+  bool get hasRiotId => this != Game.apex;
+
+  /// Matches have a full scoreboard (every player) to open.
+  bool get hasScoreboards => this != Game.apex;
+
+  /// Real wins and losses. Apex only has RP going up or down, so a gain counts as a "win".
+  bool get hasWins => this != Game.apex;
+  String get winWord => hasWins ? 'wins' : 'gains';
+  String get lossWord => hasWins ? 'losses' : 'drops';
+
+  /// Legend / Agent / Champion.
+  String get characterNoun => switch (this) { Game.apex => 'Legend', Game.valorant => 'Agent', Game.lol => 'Champion' };
+
+  /// What By Map groups by: LOL only has one ranked map, so it's the role.
+  String get mapNoun => this == Game.lol ? 'Role' : 'Map';
+
+  /// What a season's ranked stretch is called.
+  String get periodNoun => this == Game.valorant ? 'act' : 'split';
+
+  /// The account's "platform" choice: Apex platform, VALORANT PC/console, LOL queue.
+  String get platformLabel => this == Game.lol ? 'Queue' : 'Platform';
+  Map<String, String> get platforms => switch (this) { Game.apex => apexPlatforms, Game.valorant => valorantPlatforms, Game.lol => lolQueues };
+  String get defaultPlatform => switch (this) { Game.apex => 'PC', Game.valorant => 'pc', Game.lol => 'solo' };
+
+  /// VALORANT region / LOL server (null: Apex has none).
+  String get regionLabel => this == Game.lol ? 'Server' : 'Region';
+  Map<String, String>? get regions => switch (this) { Game.apex => null, Game.valorant => valorantRegions, Game.lol => lolServers };
+
+  /// The region to start on, from the phone's country (North America or Europe).
+  String? defaultRegion(String? countryCode) {
+    final american = countryCode == 'US' || countryCode == 'CA';
+    return switch (this) { Game.apex => null, Game.valorant => american ? 'na' : 'eu', Game.lol => american ? 'na1' : 'euw1' };
+  }
+}
+
 const apexPlatforms = {'PC': 'PC', 'PS4': 'PlayStation', 'X1': 'Xbox', 'SWITCH': 'Switch'};
 const valorantRegions = {
   'eu': 'Europe',
@@ -73,3 +126,24 @@ const valorantRegions = {
   'br': 'Brazil',
 };
 const valorantPlatforms = {'pc': 'PC', 'console': 'Console'};
+
+/// LOL ranked queues, each its own ladder (the worker's LOL_QUEUES).
+const lolQueues = {'solo': 'Solo/Duo', 'flex': 'Flex'};
+
+/// LOL servers, EUW first (the worker's LOL_SERVERS).
+const lolServers = {
+  'euw1': 'EUW',
+  'eun1': 'EUNE',
+  'na1': 'NA',
+  'kr': 'KR',
+  'br1': 'BR',
+  'la1': 'LAN',
+  'la2': 'LAS',
+  'oc1': 'OCE',
+  'tr1': 'TR',
+  'ru': 'RU',
+  'jp1': 'JP',
+  'sg2': 'SEA',
+  'tw2': 'TW',
+  'vn2': 'VN',
+};

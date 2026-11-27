@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import 'game.dart';
 import 'summary.dart' show valorantTierIcon;
@@ -53,7 +54,25 @@ final List<RankStep> valorantLadder = [
   const RankStep('Radiant', 2400),
 ];
 
-List<RankStep> ladderFor(Game game) => game == Game.apex ? apexLadder : valorantLadder;
+/// LOL: 100 per division from Iron IV (the worker's lolScore), Master and above on LP from 2,800.
+/// Grandmaster and Challenger depend on the server's ladder, so Master is the top step.
+final List<RankStep> lolLadder = [
+  for (final (i, tier) in const ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Diamond'].indexed)
+    for (final (d, division) in const ['IV', 'III', 'II', 'I'].indexed) RankStep('$tier $division', (i * 4 + d) * 100),
+  const RankStep('Master', 2800),
+];
+
+List<RankStep> ladderFor(Game game) => switch (game) { Game.apex => apexLadder, Game.valorant => valorantLadder, Game.lol => lolLadder };
+
+/// A score in the game's own terms: "8,852 RP", "2,000 elo", or LOL's "Gold II · 50 LP".
+String scoreText(Game game, int score) {
+  final formatted = NumberFormat.decimalPattern().format(score);
+  return switch (game) {
+    Game.apex => '$formatted RP',
+    Game.valorant => '$formatted elo',
+    Game.lol => '${rankAt(game, score).label} · ${score - rankAt(game, score).minScore} LP',
+  };
+}
 
 /// The highest step at or below [score].
 RankStep rankAt(Game game, int score) =>
@@ -81,6 +100,9 @@ const _tierColors = {
   'apex': Color(0xFFFF2E4D), // "Apex Predator"
   'predator': Color(0xFFFF2E4D),
   'radiant': Color(0xFFFFE27A),
+  'emerald': Color(0xFF2ED47A),
+  'grandmaster': Color(0xFFFF5C5C),
+  'challenger': Color(0xFFF4C874),
 };
 
 /// Accent colour for any rank name the APIs return ("Diamond 2", "Apex Predator", ...).
@@ -96,6 +118,10 @@ const apexPredatorGoal = 'Apex Predator';
 String? goalIconUrl(Game game, int targetScore, {String? label}) {
   if (game == Game.apex && label == apexPredatorGoal) return 'https://api.mozambiquehe.re/assets/ranks/apexpredator1.png';
   if (game == Game.valorant) return valorantTierIcon((targetScore ~/ 100 + 3).clamp(3, 27));
+  if (game == Game.lol) {
+    final tier = rankAt(game, targetScore).label.split(' ').first.toLowerCase();
+    return 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-$tier.png';
+  }
   // Apex art is named like "diamond3.png" / "master.png" on apexlegendsapi.com.
   final [tier, ...division] = rankAt(game, targetScore).label.split(' ');
   final number = division.isEmpty ? '' : '${const {'IV': 4, 'III': 3, 'II': 2, 'I': 1}[division.first]}';

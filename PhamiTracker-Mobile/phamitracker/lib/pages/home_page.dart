@@ -18,6 +18,7 @@ import '../widgets/rank_hero.dart';
 import '../widgets/stat_tiles.dart';
 import 'games_page.dart';
 import 'goal_sheet.dart';
+import 'wrapped_page.dart';
 import 'link_account_page.dart';
 import 'match_page.dart';
 import 'search_page.dart';
@@ -170,9 +171,9 @@ class _Dashboard extends StatelessWidget {
         MatchList(
           game: game,
           matches: summary?.matches ?? const [],
-          onOpen: game == Game.valorant
+          onOpen: game.hasScoreboards
               ? (match) => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => MatchPage(match: match, region: account.region ?? 'eu', playerName: account.displayName),
+                    builder: (_) => MatchPage(game: game, match: match, region: account.region ?? 'eu', playerName: account.displayName),
                   ))
               : null,
         ),
@@ -187,6 +188,10 @@ class _Dashboard extends StatelessWidget {
         if (summary?.split case final split?) ...[
           SectionTitle('This ${split.noun}'),
           SplitRecapCard(game: game, period: split, player: account.displayName),
+          if (split.games >= wrappedMinGames) ...[
+            const SizedBox(height: 10),
+            _WrappedButton(game: game, period: split, player: account.displayName),
+          ],
           if (split.games > 0) ...[
             const SizedBox(height: 12),
             RecordsCard(game: game, period: split),
@@ -195,10 +200,14 @@ class _Dashboard extends StatelessWidget {
         if (summary?.previousSplit case final previous?) ...[
           SectionTitle('Last ${previous.noun}'),
           SplitRecapCard(game: game, period: previous, player: account.displayName, finished: true),
+          if (previous.games >= wrappedMinGames) ...[
+            const SizedBox(height: 10),
+            _WrappedButton(game: game, period: previous, player: account.displayName, finished: true),
+          ],
         ],
         // One range for both cards, so they always add up the same games.
         if (summary != null && (summary.characters.isNotEmpty || summary.maps.isNotEmpty)) ...[
-          SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
+          SectionTitle('By ${game.characterNoun}'),
           MapStatsCard(
             game: game,
             maps: state.breakdown(game)?.characters,
@@ -206,7 +215,7 @@ class _Dashboard extends StatelessWidget {
             onRange: (range) => state.setStatsRange(game, range),
             onOpen: (stat) => _openGames(context, state, account, stat, byMap: false),
           ),
-          const SectionTitle('By Map'),
+          SectionTitle('By ${game.mapNoun}'),
           MapStatsCard(
             game: game,
             maps: state.breakdown(game)?.maps,
@@ -231,13 +240,43 @@ void _openGames(BuildContext context, AppState state, TrackedAccount account, Ma
       byMap: byMap,
       subtitle: range.label(game),
       load: () => state.api.gamesOn(account.playerId, name: stat.map, byMap: byMap, range: range),
-      onOpenMatch: game == Game.valorant
+      onOpenMatch: game.hasScoreboards
           ? (match) => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => MatchPage(match: match, region: account.region ?? 'eu', playerName: account.displayName),
+                builder: (_) => MatchPage(game: game, match: match, region: account.region ?? 'eu', playerName: account.displayName),
               ))
           : null,
     ),
   ));
+}
+
+/// Wrapped needs a few games to say anything.
+const wrappedMinGames = 5;
+
+/// "▶ Split Wrapped" (the last split) / "Wrapped so far" (this one).
+class _WrappedButton extends StatelessWidget {
+  const _WrappedButton({required this.game, required this.period, required this.player, this.finished = false});
+
+  final Game game;
+  final PeriodStats period;
+  final String player;
+  final bool finished;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: game.glow,
+        side: BorderSide(color: game.glow.withValues(alpha: 0.5)),
+        minimumSize: const Size.fromHeight(46),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => WrappedPage(game: game, period: period, player: player, finished: finished),
+      )),
+      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+      label: Text((finished ? '${period.noun} Wrapped' : 'Wrapped so far').toUpperCase(), style: AppText.label(color: game.glow)),
+    );
+  }
 }
 
 /// The player name with round search and settings buttons, like PhamiJam's home header.

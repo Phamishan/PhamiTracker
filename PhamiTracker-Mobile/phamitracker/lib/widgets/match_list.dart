@@ -253,7 +253,7 @@ class MapStatsCard extends StatelessWidget {
                 Text(
                   [
                     '${stat.matches} GAMES',
-                    '${(stat.wins * 100 / stat.matches).round()}% ${game == Game.apex ? 'GAINS' : 'WINS'}',
+                    '${(stat.wins * 100 / stat.matches).round()}% ${game.winWord.toUpperCase()}',
                     if (stat.kd != null) 'K/D ${stat.kd!.toStringAsFixed(2)}',
                   ].join(' · '),
                   style: AppText.label(size: 10),
@@ -285,7 +285,7 @@ class MapStatsCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                range == StatsRange.split ? 'No games this ${game == Game.apex ? 'split' : 'act'} yet.' : 'No games yet.',
+                range == StatsRange.split ? 'No games this ${game.periodNoun} yet.' : 'No games yet.',
                 style: const TextStyle(color: AppColors.textDim),
               ),
             ),

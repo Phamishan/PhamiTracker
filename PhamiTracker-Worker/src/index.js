@@ -21,6 +21,7 @@
 //   GET    /v1/valorant/matches/:id    full scoreboard for one VALORANT match  ?region=
 //   GET    /v1/search                  look anyone up without tracking them
 //   GET    /v1/premier                 a VALORANT Premier team and its league matches  ?name=&tag=
+//   GET    /v1/lol/matches/:id         full scoreboard for one LOL (League of Legends) match  ?server=
 //                                      ?game=&name=&tag=&platform=&region=&tzOffset=
 //
 // Every request needs `X-App-Key: <APP_KEY>`.
@@ -47,8 +48,9 @@ import { registerDevice, unregisterDevice } from "./notify.js";
 import { currentPeriod } from "./periods.js";
 import { claimPoll, getApexMaps, getApexPredator, pollDue, pollPlayer, rankLabel } from "./poller.js";
 import { fetchPremierTeam } from "./premier.js";
+import { LOL_QUEUES, LOL_SERVERS, fetchLolMatchRaw, fetchLolPlayer, normalizeLolMatch } from "./lol.js";
 import { getApexSeason } from "./seasons.js";
-import { characterStats, latestSession, mapStats, periodStats, summarize } from "./stats.js";
+import { characterStats, hasTag, latestSession, mapStats, periodStats, summarize } from "./stats.js";
 
 const DAY = 86_400_000;
 // An app/widget asking for data more than this long after the last poll triggers a live poll.
@@ -110,6 +112,9 @@ async function route(request, env, ctx) {
   }
   if (parts[1] === "valorant" && parts[2] === "matches" && parts[3] && parts.length === 4 && request.method === "GET") {
     return valorantMatch(env, parts[3], url);
+  }
+  if (parts[1] === "lol" && parts[2] === "matches" && parts[3] && parts.length === 4 && request.method === "GET") {
+    return lolMatch(env, parts[3], url);
   }
   if (parts[1] === "notifications") {
     if (parts.length === 2 && request.method === "POST") return registerNotifications(request, env);
@@ -252,10 +257,10 @@ async function route(request, env, ctx) {
   const inCurrent = periodRows.filter((m) => m.ts >= period?.start);
   const prev = period?.previous;
   const inPrevious = prev ? periodRows.filter((m) => m.ts >= prev.start && m.ts < (prev.end ?? period.start)) : [];
-  const split = period ? { kind: period.kind, name: period.name, start: period.start, end: period.end, ...periodStats(inCurrent, { tzOffset }) } : null;
+  const split = period ? { kind: period.kind, name: period.name, start: period.start, end: period.end, ...periodStats(inCurrent, { tzOffset, game: fresh.game }) } : null;
   const previousSplit =
     prev && now - period.start < 14 * DAY && inPrevious.some((m) => m.kind === "match")
-      ? { kind: period.kind, name: prev.name, start: prev.start, end: prev.end, ...periodStats(inPrevious, { tzOffset }) }
+      ? { kind: period.kind, name: prev.name, start: prev.start, end: prev.end, ...periodStats(inPrevious, { tzOffset, game: fresh.game }) }
       : null;
   const predator = fresh.game === "apex" ? (await getApexPredator(env, now))?.[fresh.platform] ?? null : null;
 
@@ -309,7 +314,7 @@ async function gamesOn(env, player, url, { now }) {
     rows = period?.start ? await load(period.start) : [];
     if (rows.length === 0) rows = await load(now - 15 * DAY);
   }
-  const matchesOn = (m) => (by === "map" ? m.detail.map : m.detail.legend ?? m.detail.agent) === name;
+  const matchesOn = (m) => (by === "map" ? m.detail.map : m.detail.legend ?? m.detail.agent ?? m.detail.champion) === name;
   const games = rows.filter(matchesOn).slice(0, 500);
   return json({
     by,
@@ -374,8 +379,16 @@ async function resolvePlayer(env, body, { opened }) {
     if (!VALORANT_REGIONS.includes(region)) return { status: 400, error: `region must be one of ${VALORANT_REGIONS}` };
     if (!VALORANT_PLATFORMS.includes(platform)) return { status: 400, error: `platform must be one of ${VALORANT_PLATFORMS}` };
     key = { game, platform, region, name, tag };
+  } else if (game === "lol") {
+    const tag = String(body.tag ?? "").trim().replace(/^#/, "");
+    const region = String(body.region ?? "euw1").toLowerCase();
+    if (!tag) return { status: 400, error: "tag is required" };
+    const queue = String(body.platform ?? "solo").toLowerCase();
+    if (!LOL_SERVERS.includes(region)) return { status: 400, error: `region must be one of ${LOL_SERVERS}` };
+    if (!LOL_QUEUES[queue]) return { status: 400, error: `platform must be one of ${Object.keys(LOL_QUEUES)}` };
+    key = { game, platform: queue, region, name, tag };
   } else {
-    return { status: 400, error: "game must be apex or valorant" };
+    return { status: 400, error: "game must be apex, valorant or lol" };
   }
   const byKey = (k) =>
     env.DB.prepare("SELECT * FROM players WHERE game = ? AND platform = ? AND region = ? AND name = ? AND tag = ?")
@@ -390,7 +403,9 @@ async function resolvePlayer(env, body, { opened }) {
 
   const snapshot = game === "apex"
     ? await fetchApexPlayer(env, { name, platform: key.platform, uid: uid || undefined })
-    : await fetchValorantPlayer(env, key);
+    : game === "lol"
+      ? await fetchLolPlayer(env, { name: key.name, tag: key.tag, server: key.region, queue: key.platform })
+      : await fetchValorantPlayer(env, key);
   if (uid) key.name = snapshot.name ?? uid;
   // VALORANT: store the region the account actually plays in, so polls go straight there.
   if (game === "valorant" && snapshot.region) key.region = snapshot.region;
@@ -482,6 +497,23 @@ async function valorantMatch(env, matchId, url) {
   return json(match);
 }
 
+/** One LOL match's scoreboard, cached like VALORANT's (a finished match never changes). */
+async function lolMatch(env, matchId, url) {
+  if (!/^[A-Z0-9]{2,5}_\d{5,15}$/.test(matchId)) return fail(400, "Bad match id");
+  const server = String(url.searchParams.get("server") ?? url.searchParams.get("region") ?? "euw1").toLowerCase();
+  if (!LOL_SERVERS.includes(server)) return fail(400, `server must be one of ${LOL_SERVERS}`);
+  const key = `match:lol:${matchId}`;
+  const now = Date.now();
+  const cached = await env.DB.prepare("SELECT value, expires_at FROM cache WHERE key = ?").bind(key).first();
+  if (cached && cached.expires_at > now) return json(JSON.parse(cached.value));
+
+  const match = normalizeLolMatch(await fetchLolMatchRaw(env, { server, matchId }));
+  await env.DB.prepare("INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)")
+    .bind(key, JSON.stringify(match), now + MATCH_CACHE_MS)
+    .run();
+  return json(match);
+}
+
 // Premier standings move a few times a week; a team page is cached for a few minutes.
 const PREMIER_CACHE_MS = 5 * 60_000;
 
@@ -544,8 +576,16 @@ async function search(env, url) {
     if (!VALORANT_REGIONS.includes(region)) return fail(400, `region must be one of ${VALORANT_REGIONS}`);
     if (!VALORANT_PLATFORMS.includes(platform)) return fail(400, `platform must be one of ${VALORANT_PLATFORMS}`);
     account = { game, platform, region, name, tag };
+  } else if (game === "lol") {
+    const tag = q("tag").replace(/^#/, "");
+    const server = (q("region") || "euw1").toLowerCase();
+    if (!tag) return fail(400, "tag is required");
+    const queue = (q("platform") || "solo").toLowerCase();
+    if (!LOL_SERVERS.includes(server)) return fail(400, `region must be one of ${LOL_SERVERS}`);
+    if (!LOL_QUEUES[queue]) return fail(400, `platform must be one of ${Object.keys(LOL_QUEUES)}`);
+    account = { game, platform: queue, region: server, name, tag };
   } else {
-    return fail(400, "game must be apex or valorant");
+    return fail(400, "game must be apex, valorant or lol");
   }
 
   const now = Date.now();
@@ -557,7 +597,9 @@ async function search(env, url) {
   try {
     state = game === "apex"
       ? await fetchApexPlayer(env, account)
-      : await fetchValorantPlayer(env, account, { allowUnrated: true });
+      : game === "lol"
+        ? await fetchLolPlayer(env, { name: account.name, tag: account.tag, server: account.region, queue: account.platform })
+        : await fetchValorantPlayer(env, account, { allowUnrated: true });
   } catch (err) {
     // The upstream API's own wording ("Not able to fetch needed resource...") means nothing to
     // players; 404 keeps its "couldn't find" meaning in the app.
@@ -575,8 +617,8 @@ async function search(env, url) {
 
   // Someone tracks this account already: use what the poller has recorded.
   const tracked = state.externalId
-    ? await env.DB.prepare("SELECT id FROM players WHERE game = ? AND external_id = ? ORDER BY last_opened_at DESC LIMIT 1")
-        .bind(game, state.externalId)
+    ? await env.DB.prepare("SELECT id FROM players WHERE game = ? AND platform = ? AND external_id = ? ORDER BY last_opened_at DESC LIMIT 1")
+        .bind(game, account.platform, state.externalId)
         .first()
     : null;
   // Searching tracks them from now on (SEARCH_TRACK_DAYS after the last search), so the next look
@@ -636,7 +678,7 @@ async function search(env, url) {
       id: null,
       game,
       name: state.name ?? name,
-      tag: game === "valorant" ? state.tag ?? account.tag : null,
+      tag: hasTag(game) ? state.tag ?? account.tag : null,
       platform: account.platform,
       region: account.region || null,
     },
@@ -682,7 +724,7 @@ async function trackSearched(env, tracked, account, state, now) {
     return;
   }
   const name = (state.name ?? account.name).toLowerCase();
-  const tag = account.game === "valorant" ? (state.tag ?? account.tag).toLowerCase() : "";
+  const tag = hasTag(account.game) ? (state.tag ?? account.tag).toLowerCase() : "";
   // OR IGNORE: the same name is already a player (another account with that name before, or a
   // search racing a link); then just renew that one.
   await env.DB.batch([
@@ -701,7 +743,7 @@ function publicPlayer(row, state) {
     id: row.id,
     game: row.game,
     name: state?.name ?? row.name,
-    tag: row.game === "valorant" ? state?.tag ?? row.tag : null,
+    tag: hasTag(row.game) ? state?.tag ?? row.tag : null,
     platform: row.platform,
     region: row.region || null,
   };

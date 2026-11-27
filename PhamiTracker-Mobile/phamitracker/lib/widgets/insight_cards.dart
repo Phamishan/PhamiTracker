@@ -360,7 +360,7 @@ class SplitRecapCard extends StatelessWidget {
                 Fact('Games · W/L', '${p.games} · ${p.wins}/${p.losses}'),
                 Fact('Peak', p.peak == null ? '—' : _number.format(p.peak)),
                 Fact(
-                  game == Game.apex ? 'Best legend' : 'Best agent',
+                  'Best ${game.characterNoun.toLowerCase()}',
                   top == null ? '—' : '${top.map} ${signed(top.delta)}',
                   color: top == null ? AppColors.text : AppColors.delta(top.delta),
                 ),
@@ -390,7 +390,7 @@ class _Endpoint extends StatelessWidget {
         Text(label.toUpperCase(), style: AppText.label(size: 9, color: AppColors.textFaint)),
         const SizedBox(height: 4),
         Text(score == null ? '—' : rankAt(game, score!).label.toUpperCase(), style: AppText.display(17)),
-        Text(score == null ? '' : '${_number.format(score)} ${game == Game.apex ? 'RP' : 'elo'}', style: AppText.mono(size: 12)),
+        Text(score == null ? '' : scoreText(game, score!), style: AppText.mono(size: 12)),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../models/game.dart';
 import '../models/match_detail.dart';
@@ -20,7 +21,11 @@ class MatchPage extends StatefulWidget {
     required this.playerName,
     this.teamNames = const [],
     this.teamLabel,
+    this.game = Game.valorant,
   });
+
+  /// VALORANT or LOL.
+  final Game game;
 
   /// The row that was tapped (for the RR change and a header while loading).
   final MatchEntry match;
@@ -50,7 +55,7 @@ class _MatchPageState extends State<MatchPage> {
     final tag = player.tag;
     if (tag == null || tag.isEmpty || _opening != null) return;
     setState(() => _opening = player.riotId);
-    final query = PlayerQuery(game: Game.valorant, name: player.name, tag: tag, platform: 'pc', region: widget.region);
+    final query = PlayerQuery(game: widget.game, name: player.name, tag: tag, platform: widget.game.defaultPlatform, region: widget.region);
     try {
       final summary = await query.run(AppScope.of(context).api);
       if (!mounted) return;
@@ -71,7 +76,7 @@ class _MatchPageState extends State<MatchPage> {
     _detail ??= _load();
   }
 
-  Future<MatchDetail> _load() => AppScope.of(context).api.valorantMatch(widget.match.matchId!, region: widget.region);
+  Future<MatchDetail> _load() => AppScope.of(context).api.matchDetail(widget.game, widget.match.matchId!, region: widget.region);
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +104,7 @@ class _MatchPageState extends State<MatchPage> {
             teamLabel: widget.teamLabel,
             onOpen: _openPlayer,
             opening: _opening,
+            game: widget.game,
           );
         },
       ),
@@ -115,8 +121,10 @@ class _Scoreboard extends StatelessWidget {
     this.teamLabel,
     this.onOpen,
     this.opening,
+    this.game = Game.valorant,
   });
 
+  final Game game;
   final MatchDetail detail;
   final MatchEntry match;
   final String playerName;
@@ -153,7 +161,7 @@ class _Scoreboard extends StatelessWidget {
                     style: AppText.label(color: team.won! ? AppColors.gain : AppColors.loss),
                   ),
           ),
-          _TeamCard(players: detail.teamPlayers(team.id), me: me, onOpen: onOpen, opening: opening),
+          _TeamCard(players: detail.teamPlayers(team.id), me: me, onOpen: onOpen, opening: opening, game: game),
         ],
       ],
     );
@@ -232,8 +240,9 @@ class _Header extends StatelessWidget {
 }
 
 class _TeamCard extends StatelessWidget {
-  const _TeamCard({required this.players, required this.me, this.onOpen, this.opening});
+  const _TeamCard({required this.players, required this.me, this.onOpen, this.opening, this.game = Game.valorant});
 
+  final Game game;
   final List<MatchPlayer> players;
   final MatchPlayer? me;
   final ValueChanged<MatchPlayer>? onOpen;
@@ -257,7 +266,7 @@ class _TeamCard extends StatelessWidget {
                 ),
                 SizedBox(
                   width: _statWidth,
-                  child: Text('ACS', style: header, textAlign: TextAlign.right),
+                  child: Text(game == Game.lol ? 'CS' : 'ACS', style: header, textAlign: TextAlign.right),
                 ),
               ],
             ),
@@ -265,6 +274,7 @@ class _TeamCard extends StatelessWidget {
           for (final p in players)
             _PlayerRow(
               player: p,
+              game: game,
               isMe: identical(p, me),
               loading: opening == p.riotId,
               onTap: onOpen == null || (p.tag ?? '').isEmpty ? null : () => onOpen!(p),
@@ -279,8 +289,9 @@ const _kdaWidth = 76.0;
 const _statWidth = 40.0;
 
 class _PlayerRow extends StatelessWidget {
-  const _PlayerRow({required this.player, required this.isMe, this.onTap, this.loading = false});
+  const _PlayerRow({required this.player, required this.isMe, this.onTap, this.loading = false, this.game = Game.valorant});
 
+  final Game game;
   final MatchPlayer player;
   final bool isMe;
 
@@ -291,11 +302,10 @@ class _PlayerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = player;
-    final extra = [
-      p.rank ?? 'Unrated',
-      if (p.adr != null) '${p.adr} ADR',
-      if (p.headshotPct != null) '${p.headshotPct}% HS',
-    ].join('  ·  ');
+    final extra = (game == Game.lol
+            ? [?p.role, if (p.damage != null) '${NumberFormat.compact().format(p.damage)} dmg']
+            : [p.rank ?? 'Unrated', if (p.adr != null) '${p.adr} ADR', if (p.headshotPct != null) '${p.headshotPct}% HS'])
+        .join('  ·  ');
     final row = Container(
       margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
@@ -349,7 +359,7 @@ class _PlayerRow extends StatelessWidget {
           ),
           SizedBox(
             width: _statWidth,
-            child: Text('${p.acs ?? '—'}', textAlign: TextAlign.right, style: AppText.display(15)),
+            child: Text('${(game == Game.lol ? p.cs : p.acs) ?? '—'}', textAlign: TextAlign.right, style: AppText.display(15)),
           ),
         ],
       ),

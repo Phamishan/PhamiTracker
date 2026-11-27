@@ -79,6 +79,25 @@ export async function currentPeriod(env, game, now, season) {
           : null,
       };
     }
+  } else if (game === "lol") {
+    // Riot has no split dates in the API: set them in wrangler.toml (LOL_SPLIT_*) like Apex's.
+    const start = Date.parse(env.LOL_SPLIT_START ?? "");
+    const end = Date.parse(env.LOL_SPLIT_END ?? "");
+    const name = env.LOL_SPLIT_NAME || "This split";
+    if (Number.isFinite(start) && start <= now && !(end <= now)) {
+      return { kind: "split", name, start, end: Number.isFinite(end) ? end : null, previous: null };
+    }
+    // Past the end: a new split runs from it (until wrangler.toml gets its dates), and the one
+    // that ended shows as the last split (recap and Wrapped) for the first two weeks.
+    if (Number.isFinite(start) && end <= now) {
+      return {
+        kind: "split",
+        name: env.LOL_NEXT_SPLIT_NAME || "New season",
+        start: end,
+        end: null,
+        previous: { name, start, end },
+      };
+    }
   } else {
     const { current, previous } = actAt(await getValorantActs(env, now), now);
     if (current) return { kind: "act", ...current, previous };

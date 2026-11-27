@@ -1,6 +1,6 @@
 int? _int(Object? v) => v is num ? v.toInt() : null;
 
-/// A VALORANT match's full scoreboard (HenrikDev v4 match, via the worker).
+/// A match's full scoreboard: VALORANT (HenrikDev v4 match) or LOL (Riot match-v5), via the worker.
 class MatchDetail {
   const MatchDetail({
     this.map,
@@ -72,6 +72,9 @@ class MatchPlayer {
     this.acs,
     this.adr,
     this.headshotPct,
+    this.cs,
+    this.damage,
+    this.role,
   });
 
   final String name;
@@ -87,6 +90,11 @@ class MatchPlayer {
   final int? acs;
   final int? adr;
   final int? headshotPct;
+
+  /// LOL: creep score, damage to champions, and role.
+  final int? cs;
+  final int? damage;
+  final String? role;
 
   String get riotId => tag == null || tag!.isEmpty ? name : '$name#$tag';
 
@@ -104,5 +112,8 @@ class MatchPlayer {
     acs: _int(json['acs']),
     adr: _int(json['adr']),
     headshotPct: _int(json['headshotPct']),
+    cs: _int(json['cs']),
+    damage: _int(json['damage']),
+    role: json['role'] as String?,
   );
 }

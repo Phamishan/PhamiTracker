@@ -37,21 +37,17 @@ class _SearchPageState extends State<SearchPage> {
   final _tag = TextEditingController();
   late Game _game = widget.initialGame;
   late String _platform = _defaultPlatform(_game);
-  String _region = 'eu';
+  late String _region = _game.defaultRegion(_country) ?? 'eu';
   bool _busy = false;
   String? _error;
 
   /// VALORANT: look up a Premier team instead of a player.
   bool _premier = false;
 
-  static String _defaultPlatform(Game game) => game == Game.apex ? 'PC' : 'pc';
+  static String _defaultPlatform(Game game) => game.defaultPlatform;
 
-  @override
-  void initState() {
-    super.initState();
-    final locale = WidgetsBinding.instance.platformDispatcher.locale;
-    if (locale.countryCode == 'US' || locale.countryCode == 'CA') _region = 'na';
-  }
+  /// The phone's country, for the default region / server.
+  final String? _country = WidgetsBinding.instance.platformDispatcher.locale.countryCode;
 
   @override
   void dispose() {
@@ -63,6 +59,7 @@ class _SearchPageState extends State<SearchPage> {
   void _selectGame(Game game) => setState(() {
         _game = game;
         _platform = _defaultPlatform(game);
+        _region = game.defaultRegion(_country) ?? _region;
         _premier = false;
         _error = null;
       });
@@ -88,15 +85,15 @@ class _SearchPageState extends State<SearchPage> {
     var name = _name.text.trim();
     var tag = _tag.text.trim().replaceFirst('#', '');
     // Accept "Name#TAG" typed into the name field.
-    if (_game == Game.valorant && name.contains('#') && tag.isEmpty) {
+    if (_game.hasRiotId && name.contains('#') && tag.isEmpty) {
       final parts = name.split('#');
       name = parts.first.trim();
       tag = parts.last.trim();
     }
-    if (name.isEmpty || (_game == Game.valorant && tag.isEmpty)) {
+    if (name.isEmpty || (_game.hasRiotId && tag.isEmpty)) {
       setState(() => _error = _premier
           ? 'Enter the team name and tag.'
-          : _game == Game.valorant
+          : _game.hasRiotId
               ? 'Enter a Riot ID and tag.'
               : 'Enter a player name.');
       return;
@@ -106,9 +103,9 @@ class _SearchPageState extends State<SearchPage> {
     await _open(PlayerQuery(
       game: _game,
       name: name,
-      tag: _game == Game.valorant ? tag : null,
+      tag: _game.hasRiotId ? tag : null,
       platform: _platform,
-      region: _game == Game.valorant ? _region : null,
+      region: _game.regions != null ? _region : null,
     ));
   }
 
@@ -137,7 +134,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final game = _game;
-    final platforms = game == Game.apex ? apexPlatforms : valorantPlatforms;
+    final platforms = game.platforms;
     return Scaffold(
       appBar: AppBar(title: const Text('Search Player')),
       body: ListView(
@@ -164,15 +161,15 @@ class _SearchPageState extends State<SearchPage> {
                 child: TextField(
                   controller: _name,
                   autocorrect: false,
-                  textInputAction: game == Game.valorant ? TextInputAction.next : TextInputAction.search,
+                  textInputAction: game.hasRiotId ? TextInputAction.next : TextInputAction.search,
                   decoration: InputDecoration(
                     labelText: game == Game.apex ? 'Player name' : _premier ? 'Team name' : 'Riot ID',
                     prefixIcon: const Icon(Icons.search_rounded),
                   ),
-                  onSubmitted: (_) => game == Game.apex ? _search() : null,
+                  onSubmitted: (_) => game.hasRiotId ? null : _search(),
                 ),
               ),
-              if (game == Game.valorant) ...[
+              if (game.hasRiotId) ...[
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
@@ -188,12 +185,12 @@ class _SearchPageState extends State<SearchPage> {
             ],
           ),
           if (!_premier) ...[
-            const SectionTitle('Platform'),
+            SectionTitle(game.platformLabel),
             OptionChips(options: platforms, selected: _platform, game: game, onSelected: (v) => setState(() => _platform = v)),
           ],
-          if (game == Game.valorant && !_premier) ...[
-            const SectionTitle('Region'),
-            OptionChips(options: valorantRegions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
+          if (game.regions case final regions? when !_premier) ...[
+            SectionTitle(game.regionLabel),
+            OptionChips(options: regions, selected: _region, game: game, onSelected: (v) => setState(() => _region = v)),
           ],
           if (_error != null) ...[
             const SizedBox(height: 18),
@@ -205,9 +202,9 @@ class _SearchPageState extends State<SearchPage> {
           Text(
             _premier
                 ? 'Shows the team\'s division, points, record, league matches and roster.'
-                : game == Game.apex
-                ? 'Shows their live rank, and records their ranked games for 3 weeks after you search.'
-                : 'Shows their rank and recent ranked games, and keeps tracking them for 3 weeks.',
+                : game == Game.valorant
+                ? 'Shows their rank and recent ranked games, and keeps tracking them for 3 weeks.'
+                : 'Shows their live rank, and records their ranked games for 3 weeks after you search.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textDim, fontSize: 13, height: 1.4),
           ),
@@ -259,9 +256,9 @@ class _SavedList extends StatelessWidget {
   }
 
   Widget _row(PlayerQuery q) {
-    final where = q.game == Game.apex
-        ? apexPlatforms[q.platform] ?? q.platform
-        : '${valorantRegions[q.region] ?? q.region} · ${valorantPlatforms[q.platform] ?? q.platform}';
+    final where = q.game.regions == null
+        ? q.game.platforms[q.platform] ?? q.platform
+        : '${q.game.regions![q.region] ?? q.region} · ${q.game.platforms[q.platform] ?? q.platform}';
     final tile = ListTile(
       onTap: onOpen == null ? null : () => onOpen!(q),
       leading: GameLogo(q.game, size: 20, color: q.game.glow),
@@ -353,9 +350,9 @@ class _PlayerPageState extends State<PlayerPage> {
                   for (final m in s.matches)
                     if (!m.isAdjustment && (byMap ? m.map : m.character) == stat.map) m,
                 ],
-        onOpenMatch: s.game == Game.valorant
+        onOpenMatch: s.game.hasScoreboards
             ? (match) => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => MatchPage(match: match, region: widget.query.region ?? 'eu', playerName: s.name),
+                  builder: (_) => MatchPage(game: s.game, match: match, region: widget.query.region ?? 'eu', playerName: s.name),
                 ))
             : null,
       ),
@@ -415,7 +412,7 @@ class _PlayerPageState extends State<PlayerPage> {
               HistoryChart(game: game, history: s.history, range: ClimbRange.twoWeeks),
             ],
             if (s.characters.isNotEmpty) ...[
-              SectionTitle(game == Game.apex ? 'By Legend' : 'By Agent'),
+              SectionTitle('By ${game.characterNoun}'),
               MapStatsCard(
                 game: game,
                 maps: _breakdown?.characters,
@@ -425,7 +422,7 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ],
             if (s.maps.isNotEmpty) ...[
-              const SectionTitle('By Map'),
+              SectionTitle('By ${game.mapNoun}'),
               MapStatsCard(
                 game: game,
                 maps: _breakdown?.maps,
@@ -438,14 +435,16 @@ class _PlayerPageState extends State<PlayerPage> {
             MatchList(
               game: game,
               matches: s.matches,
-              onOpen: game == Game.valorant
+              onOpen: game.hasScoreboards
                   ? (match) => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => MatchPage(match: match, region: widget.query.region ?? 'eu', playerName: s.name),
+                        builder: (_) => MatchPage(game: s.game, match: match, region: widget.query.region ?? 'eu', playerName: s.name),
                       ))
                   : null,
-              emptyText: game == Game.apex && !s.tracked
+              emptyText: s.tracked || game == Game.valorant
+                  ? 'No recent ranked games.'
+                  : game == Game.apex
                   ? "Apex doesn't share match history, so PhamiTracker records their games from now on. Check back after they play."
-                  : 'No recent ranked games.',
+                  : "LOL doesn't share LP per game, so PhamiTracker records their games from now on. Check back after they play.",
             ),
           ],
         ),

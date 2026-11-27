@@ -85,3 +85,28 @@ test("APNs token is a valid ES256 JWT", async () => {
   );
   assert.ok(ok);
 });
+
+test("Split Wrapped: most played, best map, sessions, hours, best session and biggest climb", async () => {
+  const { periodStats } = await import("../src/stats.js");
+  const MIN = 60_000;
+  const t0 = Date.UTC(2026, 10, 4, 18);
+  let score = 8000;
+  const g = (min, delta, legend, map) => {
+    score += delta;
+    return { ts: t0 + min * MIN, delta, score_after: score, kind: "match", detail: { legend, map } };
+  };
+  const rows = [
+    // Session 1 (18:00-18:40): down 100 to the low of 7,900.
+    g(0, -60, "Crypto", "Olympus"), g(20, -40, "Crypto", "Olympus"), g(40, 30, "Seer", "Storm Point"),
+    // Session 2, the next day: +300 in 3 games, the best session.
+    g(24 * 60, 120, "Crypto", "Olympus"), g(24 * 60 + 20, 100, "Crypto", "Olympus"), g(24 * 60 + 40, 80, "Seer", "Storm Point"),
+  ];
+  const w = periodStats(rows, { game: "apex" }).wrapped;
+  assert.equal(w.mostPlayed.name, "Crypto");
+  assert.equal(w.mostPlayed.matches, 4);
+  assert.equal(w.bestMap.map, "Olympus"); // +120 vs Storm Point +110
+  assert.equal(w.sessions, 2);
+  assert.equal(w.hours, 2); // 40 min + 20 min a game, twice
+  assert.deepEqual([w.bestSession.net, w.bestSession.games], [300, 3]);
+  assert.deepEqual([w.biggestClimb.from, w.biggestClimb.to, w.biggestClimb.delta], [7900, 8230, 330]);
+});

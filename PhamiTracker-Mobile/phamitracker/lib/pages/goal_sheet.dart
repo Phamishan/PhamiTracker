@@ -46,7 +46,6 @@ class _GoalSheetState extends State<_GoalSheet> {
     final score = state.summaries[game]?.score ?? 0;
     final current = state.goals[game];
     final steps = ladderFor(game).where((r) => r.minScore > score).toList();
-    final number = NumberFormat.decimalPattern();
     final predator = game == Game.apex ? state.summaries[game]?.predator : null;
 
     return DraggableScrollableSheet(
@@ -60,7 +59,7 @@ class _GoalSheetState extends State<_GoalSheet> {
           const Text('Rank goal', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
           Text(
-            'You\'re at ${number.format(score)} ${game == Game.apex ? 'RP' : 'elo'}. Progress counts from here.',
+            'You\'re at ${scoreText(game, score)}. Progress counts from here.',
             style: const TextStyle(color: AppColors.textDim),
           ),
           if (game == Game.apex) ...[
@@ -102,7 +101,7 @@ class _GoalSheetState extends State<_GoalSheet> {
               child: _RankOption(
                 step: step,
                 remaining: step.minScore - score,
-                unit: game == Game.apex ? 'RP' : 'RR',
+                unit: game.unit,
                 selected: current?.targetScore == step.minScore,
                 onTap: () => _choose(step.label, step.minScore),
               ),

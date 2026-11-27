@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/game.dart';
+import '../models/ranks.dart';
 import '../models/summary.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -33,9 +34,9 @@ List<CompareRow> compareRows(PlayerSummary me, PlayerSummary them) {
   final game = me.game;
   final rows = <CompareRow>[
     CompareRow(
-      game == Game.apex ? 'Ranked RP' : 'Rating (elo)',
-      me.score == null ? '—' : _number.format(me.score),
-      them.score == null ? '—' : _number.format(them.score),
+      switch (game) { Game.apex => 'Ranked RP', Game.valorant => 'Rating (elo)', Game.lol => 'Rank' },
+      me.score == null ? '—' : (game == Game.lol ? scoreText(game, me.score!) : _number.format(me.score)),
+      them.score == null ? '—' : (game == Game.lol ? scoreText(game, them.score!) : _number.format(them.score)),
       mine: me.score,
       theirs: them.score,
     ),
@@ -57,7 +58,7 @@ List<CompareRow> compareRows(PlayerSummary me, PlayerSummary them) {
       theirs: theirGames.isEmpty ? null : net(theirGames),
     ));
     rows.add(CompareRow(
-      game == Game.apex ? 'Gains · last 10' : 'Wins · last 10',
+      '${game.hasWins ? 'Wins' : 'Gains'} · last 10',
       myGames.isEmpty ? '—' : '${wins(myGames)}/${myGames.length}',
       theirGames.isEmpty ? '—' : '${wins(theirGames)}/${theirGames.length}',
       mine: myGames.isEmpty ? null : wins(myGames) / myGames.length,
@@ -100,7 +101,7 @@ List<CompareRow> compareRows(PlayerSummary me, PlayerSummary them) {
   if (myBest != null || theirBest != null) {
     // Shown for fun; not scored (different legends/agents aren't comparable).
     rows.add(CompareRow(
-      game == Game.apex ? 'Best legend' : 'Best agent',
+      'Best ${game.characterNoun.toLowerCase()}',
       myBest == null ? '—' : '${myBest.map} ${signed(myBest.delta)}',
       theirBest == null ? '—' : '${theirBest.map} ${signed(theirBest.delta)}',
     ));

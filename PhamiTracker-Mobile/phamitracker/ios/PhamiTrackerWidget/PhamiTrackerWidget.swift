@@ -168,19 +168,50 @@ private struct StatusPill: View {
 // MARK: - Configuration
 
 enum TrackedGame: String, AppEnum {
-  case apex, valorant
+  case apex, valorant, lol
 
   static var typeDisplayRepresentation: TypeDisplayRepresentation = "Game"
   static var caseDisplayRepresentations: [TrackedGame: DisplayRepresentation] = [
     .apex: "Apex Legends",
     .valorant: "VALORANT",
+    .lol: "LOL",
   ]
 
-  var title: String { self == .apex ? "APEX" : "VALORANT" }
-  var unit: String { self == .apex ? "RP" : "RR" }
+  var title: String {
+    switch self {
+    case .apex: return "APEX"
+    case .valorant: return "VALORANT"
+    case .lol: return "LOL"
+    }
+  }
+
+  var unit: String {
+    switch self {
+    case .apex: return "RP"
+    case .valorant: return "RR"
+    case .lol: return "LP"
+    }
+  }
+
   /// Bundled logo (Logos/logo-<game>@3x.png, rendered from lib/models/game.dart).
   var logo: UIImage? { UIImage(named: "logo-\(rawValue)") }
-  var accent: Color { self == .apex ? Color(hex: 0xE0604E) : Color(hex: 0xFF4655) }
+
+  var accent: Color {
+    switch self {
+    case .apex: return Color(hex: 0xE0604E)
+    case .valorant: return Color(hex: 0xFF4655)
+    case .lol: return Color(hex: 0xC89B3C)
+    }
+  }
+
+  /// The score line under the rank: Apex RP, VALORANT RR in the division, LOL LP in the division.
+  func scoreText(_ score: Int, rr: Int?) -> String {
+    switch self {
+    case .apex: return "\(score.formatted()) RP"
+    case .valorant: return "\(rr ?? 0) RR"
+    case .lol: return "\(score - rankStep(.lol, score).floor) LP"
+    }
+  }
 }
 
 struct GameIntent: WidgetConfigurationIntent {
@@ -334,7 +365,9 @@ struct Snapshot: Codable {
     let map: String?
     let legend: String?
     let agent: String?
-    /// RP (Apex) or elo (VALORANT) after the game, for the rank up / rank down tag.
+    /// LOL's champion (VALORANT: agent, Apex: legend).
+    var champion: String? = nil
+    /// RP (Apex), elo (VALORANT) or LOL's score after the game, for the rank up / rank down tag.
     var scoreAfter: Int? = nil
 
     /// The rank this game moved into when it crossed a division (rankChangeOf in match_list.dart).
@@ -425,7 +458,20 @@ struct TrackerEntry: TimelineEntry {
   var climbRange: ClimbSpan = .week
 
   static func preview(_ game: TrackedGame) -> TrackerEntry {
-    let base = game == .apex ? 13_100 : 1_380
+    let base: Int
+    let rankName: String
+    let goal: Goal
+    switch game {
+    case .apex:
+      base = 13_100; rankName = "Diamond III"
+      goal = Goal(label: "Master", targetScore: 16_000, startScore: base)
+    case .valorant:
+      base = 1_380; rankName = "Diamond 1"
+      goal = Goal(label: "Ascendant 1", targetScore: 1_800, startScore: base)
+    case .lol:
+      base = 1_400; rankName = "Gold I"
+      goal = Goal(label: "Platinum IV", targetScore: 1_600, startScore: base)
+    }
     let steps = [0, 60, 25, 140, 120, 230, 360]
     let now = Date.now.timeIntervalSince1970 * 1000
     return TrackerEntry(
@@ -435,8 +481,8 @@ struct TrackerEntry: TimelineEntry {
       name: game == .apex ? "Phami" : "Phami#EUW",
       snapshot: Snapshot(
         score: base + steps.last!,
-        rankLabel: game == .apex ? "Diamond III" : "Diamond 1",
-        rank: Snapshot.Rank(name: game == .apex ? "Diamond" : "Diamond 1", rr: 42),
+        rankLabel: rankName,
+        rank: Snapshot.Rank(name: rankName, rr: 42),
         today: Snapshot.Today(delta: 359, matches: 6, wins: 4, losses: 2, best: 196, worst: -26, series: [40, 25, 120, 95, 160, 359]),
         status: Snapshot.Status(online: true, inGame: false),
         polledAt: now,
@@ -451,7 +497,7 @@ struct TrackerEntry: TimelineEntry {
           start: now - 7_200_000, end: now - 600_000, series: [40, 25, 120, 95, 44, 240]
         )
       ),
-      goal: Goal(label: game == .apex ? "Master" : "Ascendant 1", targetScore: game == .apex ? 16_000 : 1_800, startScore: base)
+      goal: goal
     )
   }
 }
@@ -784,7 +830,7 @@ struct SessionLiveActivity: Widget {
               GameLogo(game: game, size: 14, color: accent)
               Text(s.rank.uppercased()).font(grotesk(13, .bold)).lineLimit(1)
             }
-            Text("\(s.score.formatted()) \(context.attributes.unit)").font(grotesk(12).monospacedDigit()).foregroundStyle(textDim)
+            Text(game == .lol ? game.scoreText(s.score, rr: nil) : "\(s.score.formatted()) \(context.attributes.unit)").font(grotesk(12).monospacedDigit()).foregroundStyle(textDim)
           }
         }
         DynamicIslandExpandedRegion(.trailing) {
@@ -828,7 +874,7 @@ private struct SessionLockScreen: View {
         Spacer()
         VStack(alignment: .trailing, spacing: 2) {
           Text(s.rank.uppercased()).font(grotesk(14, .bold)).foregroundStyle(.white).lineLimit(1)
-          Text("\(s.score.formatted()) \(context.attributes.unit)").font(grotesk(12).monospacedDigit()).foregroundStyle(textDim)
+          Text(game == .lol ? game.scoreText(s.score, rr: nil) : "\(s.score.formatted()) \(context.attributes.unit)").font(grotesk(12).monospacedDigit()).foregroundStyle(textDim)
         }
       }
       SessionFacts(state: s, unit: context.attributes.unit)
@@ -940,9 +986,25 @@ private let valorantRankFloors: [(label: String, floor: Int)] = {
   return floors
 }()
 
+/// LOL: 100 per division from Iron IV, Master and above on LP from 2,800 (lolLadder in ranks.dart).
+private let lolRankFloors: [(label: String, floor: Int)] = {
+  let tiers = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond"]
+  var floors: [(label: String, floor: Int)] = []
+  for (i, tier) in tiers.enumerated() {
+    for (d, division) in ["IV", "III", "II", "I"].enumerated() { floors.append(("\(tier) \(division)", (i * 4 + d) * 100)) }
+  }
+  floors.append(("Master", 2800))
+  return floors
+}()
+
 /// The highest rank at or below [score] (rankAt in ranks.dart).
 private func rankStep(_ game: TrackedGame, _ score: Int) -> (label: String, floor: Int) {
-  let floors = game == .apex ? apexRankFloors : valorantRankFloors
+  let floors: [(label: String, floor: Int)]
+  switch game {
+  case .apex: floors = apexRankFloors
+  case .valorant: floors = valorantRankFloors
+  case .lol: floors = lolRankFloors
+  }
   return floors.last(where: { $0.floor <= score }) ?? floors[0]
 }
 
@@ -955,7 +1017,7 @@ private struct MatchRow: View {
   var body: some View {
     let adjust = match.kind == "adjust"
     let color = adjust ? textDim : deltaColor(match.delta)
-    let title = adjust ? "Rank adjustment" : [match.legend ?? match.agent, match.map].compactMap { $0 }.joined(separator: " · ")
+    let title = adjust ? "Rank adjustment" : [match.legend ?? match.agent ?? match.champion, match.map].compactMap { $0 }.joined(separator: " · ")
     HStack(spacing: 10) {
       Image(systemName: adjust ? "slider.horizontal.3" : match.delta >= 0 ? "arrow.up" : "arrow.down")
         .font(.system(size: 11, weight: .bold))
@@ -1105,7 +1167,7 @@ struct RPTodayView: View {
         VStack(alignment: .leading, spacing: 1) {
           Text((entry.snapshot?.rankLabel ?? "—").uppercased()).font(display(17)).lineLimit(1).minimumScaleFactor(0.6)
           if let score = entry.snapshot?.score {
-            Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
+            Text(entry.game.scoreText(score, rr: entry.snapshot?.rank?.rr))
               .font(grotesk(12).monospacedDigit())
               .foregroundStyle(textDim)
           }
@@ -1479,7 +1541,7 @@ struct ClimbView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.6)
           if family != .systemSmall, let score = entry.snapshot?.score {
-            Text(entry.game == .apex ? "\(score.formatted()) RP" : "\(entry.snapshot?.rank?.rr ?? 0) RR")
+            Text(entry.game.scoreText(score, rr: entry.snapshot?.rank?.rr))
               .font(grotesk(12).monospacedDigit())
               .foregroundStyle(textDim)
           }

@@ -130,7 +130,8 @@ class _AccountTile extends StatelessWidget {
         ? 'Not linked'
         : [
             account.displayName,
-            game == Game.apex ? apexPlatforms[account.platform] : valorantRegions[account.region],
+            game.regions?[account.region] ?? game.platforms[account.platform],
+            if (game == Game.lol) game.platforms[account.platform],
           ].nonNulls.join(' · ');
 
     return TrackerCard(

@@ -4,7 +4,7 @@
 
 import { liveActivitiesEnabled, sendApns, sessionAttributes } from "./live.js";
 import { rankLabel } from "./poller.js";
-import { sessionIdleMs } from "./stats.js";
+import { sessionIdleMs, unitFor } from "./stats.js";
 
 const MINUTES = 60_000;
 // A session ends this long after the last game (same as Live Activities).
@@ -103,7 +103,7 @@ export async function notifyGoals(
       .all()
   ).results;
   if (goals.length === 0 || !liveActivitiesEnabled(env)) return 0;
-  const unit = player.game === "apex" ? "RP" : "elo";
+  const unit = player.game === "valorant" ? "elo" : unitFor(player.game);
   let sent = 0;
   for (const goal of goals) {
     const joke =
@@ -341,7 +341,7 @@ export async function notifyFollowers(
   const who = {
     name: sessionAttributes(player, state).player,
     game: player.game,
-    unit: player.game === "apex" ? "RP" : "RR",
+    unit: unitFor(player.game),
   };
   let sent = 0;
   for (const event of events) {

@@ -15,7 +15,7 @@
 // Var:     APNS_TOPIC (the app's bundle id, default phamishan.phamitracker).
 
 import { changes, rankLabel } from "./poller.js";
-import { sessionGapMs, sessionIdleMs } from "./stats.js";
+import { gameTitle, hasTag, sessionGapMs, sessionIdleMs, unitFor } from "./stats.js";
 
 const MINUTES = 60_000;
 const HOURS = 60 * MINUTES;
@@ -102,11 +102,11 @@ export function sessionState(player, startScore, games, now) {
 export function sessionAttributes(player, state) {
   const saved = typeof player.state === "string" ? JSON.parse(player.state) : player.state;
   const name = state?.name ?? saved?.name ?? player.name;
-  const tag = player.game === "valorant" ? state?.tag ?? saved?.tag ?? player.tag : null;
+  const tag = hasTag(player.game) ? state?.tag ?? saved?.tag ?? player.tag : null;
   return {
     game: player.game,
     player: tag ? `${name}#${tag}` : name,
-    unit: player.game === "apex" ? "RP" : "RR",
+    unit: unitFor(player.game),
     playerId: player.id,
   };
 }
@@ -117,7 +117,8 @@ export function sessionAttributes(player, state) {
  */
 export async function trackLiveSession(env, player, state, recorded, now = Date.now(), { baseline = false } = {}) {
   const games = recorded.filter((m) => m.kind === "match");
-  const inGame = player.game === "apex" && state?.status?.inGame === true;
+  // Apex and LOL say when someone is in a (ranked) match; VALORANT only shows finished games.
+  const inGame = player.game !== "valorant" && state?.status?.inGame === true;
   // The first poll after linking backfills VALORANT history: old games, not a session starting.
   const fresh = player.game === "valorant"
     ? (baseline ? [] : games.filter((m) => now - m.ts < VALORANT_FRESH_MS))
@@ -163,7 +164,7 @@ export async function trackLiveSession(env, player, state, recorded, now = Date.
       attributes: sessionAttributes(player, state),
       "stale-date": Math.floor((now + 2 * HOURS) / 1000),
       alert: {
-        title: player.game === "apex" ? "Apex session started" : "VALORANT session started",
+        title: `${gameTitle(player.game)} session started`,
         body: "Tracking your ranked games on the lock screen.",
       },
     },

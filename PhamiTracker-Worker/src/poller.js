@@ -4,6 +4,7 @@ import { fetchApexMaps, fetchApexPlayer, fetchApexPredator, rankedMapAt } from "
 import { pushLiveActivities, trackLiveSession } from "./live.js";
 import { notifyFollowers, notifyGoals } from "./notify.js";
 import { fetchValorantHistory, fetchValorantMatchDetails, fetchValorantPlayer } from "./valorant.js";
+import { fetchLolMatchIds, fetchLolMatchRaw, fetchLolPlayer, lolGameDetail } from "./lol.js";
 import { isApexAdjustment, nextPollDelay } from "./stats.js";
 
 const DAY = 86_400_000;
@@ -32,9 +33,10 @@ export async function pollDue(env, now = Date.now()) {
         .all()
     ).results;
 
-  const [apex, valorant] = await Promise.all([
+  const [apex, valorant, lol] = await Promise.all([
     due("apex", Number(env.APEX_POLLS_PER_RUN ?? 90)),
     due("valorant", Number(env.VALORANT_POLLS_PER_RUN ?? 8)),
+    due("lol", Number(env.LOL_POLLS_PER_RUN ?? 12)),
   ]);
 
   // apexlegendsapi.com allows 2 requests/second: one poll starts every 600 ms (90 fit in a
@@ -51,8 +53,9 @@ export async function pollDue(env, now = Date.now()) {
       await sleep(Math.max(0, spacing - (Date.now() - t)));
     }
   };
-  await Promise.all([run(apex, 600), run(valorant, 250)]);
-  return { apex: apex.length, valorant: valorant.length };
+  // LOL: a personal Riot key allows 100 requests per 2 minutes; a poll is 2-3 of them.
+  await Promise.all([run(apex, 600), run(valorant, 250), run(lol, 2_500)]);
+  return { apex: apex.length, valorant: valorant.length, lol: lol.length };
 }
 
 /** Rows changed by a D1 run() (or node:sqlite's, in tests). */
@@ -77,7 +80,9 @@ export async function pollPlayer(env, player) {
   try {
     const result = player.game === "apex"
       ? await pollApex(env, player, prevState, now)
-      : await pollValorant(env, player, prevState, now);
+      : player.game === "lol"
+        ? await pollLol(env, player, prevState, now)
+        : await pollValorant(env, player, prevState, now);
 
     const changed = result.matches.length > 0;
     const lastChangeAt = changed ? now : player.last_change_at;
@@ -211,6 +216,119 @@ async function pollValorant(env, player, prevState, now) {
       detail: { map: entry.map, rank: entry.tier, ...(details[entry.matchId] ?? {}) },
     })),
   };
+}
+
+/** A Riot match id we've recorded (or skipped) stays known this long, to never record it twice. */
+const LOL_SEEN = 20;
+/** How long an LP change waits for its match to show up before it's called a rank adjustment. */
+const LOL_PENDING_MS = 10 * 60_000;
+
+/**
+ * LOL: league-v4 has the LP, match-v5 the games. When the LP moves, the new Solo/Duo matches since
+ * the last one get it: one match takes the whole change, several (missed checks) split it by
+ * win/loss. An LP change with no new match after 10 minutes is decay or a correction: an
+ * adjustment.
+ */
+async function pollLol(env, player, prevState, now) {
+  const server = player.region || "euw1";
+  const state = await fetchLolPlayer(env, {
+    puuid: player.external_id,
+    name: prevState?.name ?? player.name,
+    tag: prevState?.tag ?? player.tag,
+    server,
+    queue: player.platform,
+  });
+  // Games that ended after this are new. The first poll starts the clock: no backfill, the LP
+  // of older games is unknown.
+  state.matchCursor = prevState?.matchCursor ?? now;
+  state.seenMatchIds = prevState?.seenMatchIds ?? [];
+  state.pendingSince = prevState?.pendingSince ?? null;
+
+  if (!prevState || player.score == null || state.score == null || state.score === player.score) {
+    if (state.score === player.score) state.pendingSince = null;
+    return { state, matches: [] };
+  }
+
+  const delta = state.score - player.score;
+  // startTime is when a game started, so look an hour before the cursor and skip what we know.
+  const ids = (await fetchLolMatchIds(env, { puuid: state.externalId, server, queue: player.platform, since: state.matchCursor - 60 * 60_000 }))
+    .filter((id) => !state.seenMatchIds.includes(id))
+    .slice(0, 5);
+  const games = [];
+  for (const id of ids) {
+    const detail = lolGameDetail(await fetchLolMatchRaw(env, { server, matchId: id }), state.externalId);
+    state.seenMatchIds = [id, ...state.seenMatchIds].slice(0, LOL_SEEN);
+    if (detail && !detail.remake && detail.endedAt > state.matchCursor) games.push(detail);
+  }
+  games.sort((a, b) => a.endedAt - b.endedAt);
+
+  if (games.length === 0) {
+    state.pendingSince ??= now;
+    if (now - state.pendingSince < LOL_PENDING_MS) {
+      // Keep the stored score, so the next poll sees the same change and looks again.
+      state.heldScore = state.score;
+      state.score = player.score;
+      return { state, matches: [] };
+    }
+    state.pendingSince = null;
+    return {
+      state,
+      matches: [{
+        ts: now,
+        delta,
+        scoreAfter: state.score,
+        kind: "adjust",
+        externalId: `lol:${player.last_change_at ?? 0}:${player.score}>${state.score}`,
+        detail: { rank: state.rank.name },
+      }],
+    };
+  }
+
+  state.pendingSince = null;
+  state.matchCursor = Math.max(state.matchCursor, ...games.map((g) => g.endedAt));
+  const deltas = splitLp(delta, games);
+  let score = player.score;
+  return {
+    state,
+    matches: games.map((g, i) => {
+      score += deltas[i];
+      return {
+        ts: g.endedAt,
+        delta: deltas[i],
+        scoreAfter: i === games.length - 1 ? state.score : score,
+        kind: "match",
+        externalId: g.matchId,
+        detail: {
+          champion: g.champion,
+          map: g.map,
+          kills: g.kills,
+          deaths: g.deaths,
+          assists: g.assists,
+          cs: g.cs,
+          damage: g.damage,
+          won: g.won,
+          rank: state.rank.name,
+          ...(games.length > 1 ? { lpEstimated: true } : {}),
+        },
+      };
+    }),
+  };
+}
+
+/**
+ * Splits one LP change over several games: the same amount won per win and lost per loss when
+ * that adds up, otherwise evenly. The last game takes the rounding.
+ */
+export function splitLp(delta, games) {
+  if (games.length === 1) return [delta];
+  const wins = games.filter((g) => g.won).length;
+  const losses = games.length - wins;
+  const per = wins !== losses ? delta / (wins - losses) : 0;
+  const out = per > 0
+    ? games.map((g) => Math.round(g.won ? per : -per))
+    : games.map(() => Math.round(delta / games.length));
+  out[out.length - 1] += delta - out.reduce((a, b) => a + b, 0);
+  return out;
 }
 
 export function rankLabel(game, state) {
